@@ -1,0 +1,16 @@
+{
+  "name": "3d-threejs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Three.js demos with static assets",
+  "scripts": {
+    "start": "http-server -p 5500 -c-1 .",
+    "start:boom": "http-server -p 5500 -c-1 . -o /boom.html"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "three": "^0.181.2"
+  }
+}
