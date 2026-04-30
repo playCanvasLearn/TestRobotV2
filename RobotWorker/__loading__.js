@@ -116,6 +116,31 @@ pc.script.createLoadingScreen(function (app) {
             return svg;
         }
 
+        if (type === 'materials') {
+            var p = document.createElementNS(ns, 'path');
+            p.setAttribute('d', 'M12 3l8 4v10l-8 4l-8-4V7l8-4z');
+            svg.appendChild(p);
+            var l1 = document.createElementNS(ns, 'path');
+            l1.setAttribute('d', 'M12 3v18');
+            svg.appendChild(l1);
+            var l2 = document.createElementNS(ns, 'path');
+            l2.setAttribute('d', 'M4 7l8 4l8-4');
+            svg.appendChild(l2);
+            return svg;
+        }
+
+        if (type === 'eye') {
+            var e1 = document.createElementNS(ns, 'path');
+            e1.setAttribute('d', 'M2 12s4-7 10-7s10 7 10 7s-4 7-10 7S2 12 2 12z');
+            svg.appendChild(e1);
+            var e2 = document.createElementNS(ns, 'circle');
+            e2.setAttribute('cx', '12');
+            e2.setAttribute('cy', '12');
+            e2.setAttribute('r', '3');
+            svg.appendChild(e2);
+            return svg;
+        }
+
         var head = document.createElementNS(ns, 'path');
         head.setAttribute('d', 'M12 12a4 4 0 1 0-4-4a4 4 0 0 0 4 4');
         svg.appendChild(head);
@@ -152,9 +177,21 @@ pc.script.createLoadingScreen(function (app) {
         btnFirst.setAttribute('aria-label', '第一人称(眼部)');
         btnFirst.appendChild(createIconSvg('first'));
 
+        var toolbarSep = document.createElement('div');
+        toolbarSep.className = 'toolbar-sep';
+        toolbarSep.setAttribute('aria-hidden', 'true');
+
+        var btnMaterials = document.createElement('button');
+        btnMaterials.type = 'button';
+        btnMaterials.className = 'toolbar-btn toolbar-btn-materials';
+        btnMaterials.setAttribute('aria-label', '查看场景物品');
+        btnMaterials.appendChild(createIconSvg('materials'));
+
         toolbar.appendChild(btnThird);
         toolbar.appendChild(btnFixed);
         toolbar.appendChild(btnFirst);
+        toolbar.appendChild(toolbarSep);
+        toolbar.appendChild(btnMaterials);
         document.body.appendChild(toolbar);
 
         var canvas = document.getElementById('application-canvas');
@@ -164,6 +201,36 @@ pc.script.createLoadingScreen(function (app) {
         var orbitScript = cameraEntity && cameraEntity.script && cameraEntity.script.cameraOrbitZoom ? cameraEntity.script.cameraOrbitZoom : null;
 
         var viewMode = 'third';
+        var isMaterialsOpen = false;
+
+        var materialsPanel = document.createElement('div');
+        materialsPanel.id = 'materials-panel';
+        materialsPanel.setAttribute('role', 'dialog');
+        materialsPanel.setAttribute('aria-label', '场景物品');
+        materialsPanel.style.display = 'none';
+
+        var materialsHeader = document.createElement('div');
+        materialsHeader.className = 'materials-header';
+
+        var materialsTitle = document.createElement('div');
+        materialsTitle.className = 'materials-title';
+        materialsTitle.innerText = '场景物品';
+
+        var materialsSearch = document.createElement('input');
+        materialsSearch.className = 'materials-search';
+        materialsSearch.type = 'search';
+        materialsSearch.placeholder = '搜索物品名称';
+        materialsSearch.autocomplete = 'off';
+        materialsSearch.spellcheck = false;
+
+        var materialsList = document.createElement('div');
+        materialsList.className = 'materials-list';
+
+        materialsHeader.appendChild(materialsTitle);
+        materialsHeader.appendChild(materialsSearch);
+        materialsPanel.appendChild(materialsHeader);
+        materialsPanel.appendChild(materialsList);
+        document.body.appendChild(materialsPanel);
 
         var tmpForward = new pc.Vec3();
         var tmpRight = new pc.Vec3();
@@ -200,6 +267,235 @@ pc.script.createLoadingScreen(function (app) {
         };
 
         var eyeMount = null;
+
+        var treeExpanded = Object.create(null);
+        var selectedPath = '';
+        var highlighted = null;
+
+        var findByNameLower = function (root, nameLower) {
+            if (!root) return null;
+            var stack = [root];
+            while (stack.length) {
+                var e = stack.pop();
+                var n = (e.name || '').toLowerCase();
+                if (n === nameLower) return e;
+                var children = e.children;
+                for (var i = 0; i < children.length; i++) stack.push(children[i]);
+            }
+            return null;
+        };
+
+        var getSceneRoot = function () {
+            var sr = app.root.findByName('SceneRoot');
+            if (sr) return sr;
+            sr = findByNameLower(app.root, 'sceneroot');
+            if (sr) return sr;
+            return app.root;
+        };
+
+        var resolveEntityByPath = function (root, path) {
+            if (!root || !path) return null;
+            var parts = path.split('.');
+            var node = root;
+            for (var i = 1; i < parts.length; i++) {
+                var idx = parseInt(parts[i], 10);
+                if (!node || !node.children || idx !== idx) return null;
+                if (idx < 0 || idx >= node.children.length) return null;
+                node = node.children[idx];
+            }
+            return node;
+        };
+
+        var clearHighlight = function () {
+            if (!highlighted || !highlighted.items) return;
+            for (var i = 0; i < highlighted.items.length; i++) {
+                var it = highlighted.items[i];
+                if (!it || !it.meshInstance) continue;
+                it.meshInstance.material = it.material;
+            }
+            highlighted = null;
+        };
+
+        var applyHighlight = function (entity) {
+            clearHighlight();
+            if (!entity) return;
+            var items = [];
+
+            entity.forEach(function (node) {
+                var meshInstances = null;
+                if (node.render && node.render.meshInstances) meshInstances = node.render.meshInstances;
+                else if (node.model && node.model.meshInstances) meshInstances = node.model.meshInstances;
+                if (!meshInstances || !meshInstances.length) return;
+
+                for (var i = 0; i < meshInstances.length; i++) {
+                    var mi = meshInstances[i];
+                    if (!mi || !mi.material || !mi.material.clone) continue;
+
+                    items.push({ meshInstance: mi, material: mi.material });
+
+                    var cloned = mi.material.clone();
+                    if (cloned.emissive && cloned.emissive.set) cloned.emissive.set(0, 0.6, 1);
+                    if (cloned.emissiveIntensity !== undefined) cloned.emissiveIntensity = 1.8;
+                    if (cloned.update) cloned.update();
+                    mi.material = cloned;
+                }
+            });
+
+            highlighted = { items: items };
+        };
+
+        var shouldShowNode = function (node, q) {
+            if (!q) return true;
+            var name = (node.name || '').toLowerCase();
+            if (name.indexOf(q) !== -1) return true;
+            var children = node.children;
+            for (var i = 0; i < children.length; i++) {
+                if (shouldShowNode(children[i], q)) return true;
+            }
+            return false;
+        };
+
+        var renderSceneTree = function () {
+            var q = (materialsSearch.value || '').trim().toLowerCase();
+            var root = getSceneRoot();
+
+            materialsList.textContent = '';
+
+            if (!root) {
+                var empty0 = document.createElement('div');
+                empty0.className = 'materials-empty';
+                empty0.innerText = '未找到 SceneRoot';
+                materialsList.appendChild(empty0);
+                return;
+            }
+
+            var any = false;
+
+            var renderNode = function (node, depth, path) {
+                if (!shouldShowNode(node, q)) return;
+
+                any = true;
+                var children = node.children || [];
+                var hasChildren = children.length > 0;
+
+                var matched = !q || ((node.name || '').toLowerCase().indexOf(q) !== -1);
+                var expanded = depth === 0 || (!!treeExpanded[path]) || (!!q && hasChildren && shouldShowNode(node, q));
+
+                var row = document.createElement('div');
+                row.className = 'scene-row' + (selectedPath === path ? ' is-selected' : '');
+                row.dataset.path = path;
+                row.dataset.hasChildren = hasChildren ? '1' : '0';
+                row.dataset.depth = String(depth);
+                row.dataset.expanded = expanded ? '1' : '0';
+                row.style.paddingLeft = (10 + depth * 14) + 'px';
+
+                var toggle = document.createElement('div');
+                toggle.className = 'scene-toggle' + (hasChildren ? '' : ' is-leaf') + (expanded ? ' is-open' : '');
+                row.appendChild(toggle);
+
+                var nameEl = document.createElement('div');
+                nameEl.className = 'scene-name' + (matched && q ? ' is-match' : '');
+                nameEl.innerText = node.name || '(未命名)';
+                row.appendChild(nameEl);
+
+                if (depth > 0 && hasChildren) {
+                    var eyeBtn = document.createElement('button');
+                    eyeBtn.type = 'button';
+                    eyeBtn.className = 'scene-eye';
+                    eyeBtn.setAttribute('aria-label', '高亮选中');
+                    eyeBtn.dataset.path = path;
+                    eyeBtn.appendChild(createIconSvg('eye'));
+                    row.appendChild(eyeBtn);
+                }
+
+                materialsList.appendChild(row);
+
+                if (!hasChildren) return;
+                if (!expanded) return;
+
+                for (var i = 0; i < children.length; i++) {
+                    renderNode(children[i], depth + 1, path + '.' + i);
+                }
+            };
+
+            renderNode(root, 0, '0');
+
+            if (!any) {
+                var empty = document.createElement('div');
+                empty.className = 'materials-empty';
+                empty.innerText = '无匹配物品';
+                materialsList.appendChild(empty);
+            }
+        };
+
+        var setMaterialsOpen = function (open) {
+            if (open === isMaterialsOpen) return;
+            isMaterialsOpen = open;
+            if (isMaterialsOpen) {
+                btnMaterials.classList.add('is-active');
+                materialsPanel.style.display = '';
+                renderSceneTree();
+                materialsSearch.focus();
+                materialsSearch.select();
+            } else {
+                btnMaterials.classList.remove('is-active');
+                materialsPanel.style.display = 'none';
+            }
+        };
+
+        materialsSearch.addEventListener('input', function () {
+            if (!isMaterialsOpen) return;
+            renderSceneTree();
+        });
+
+        materialsList.addEventListener('click', function (ev) {
+            var t = ev.target;
+            var eye = null;
+            while (t && t !== materialsList) {
+                if (t.classList && t.classList.contains('scene-eye')) {
+                    eye = t;
+                    break;
+                }
+                t = t.parentElement;
+            }
+
+            if (eye) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                var p = eye.dataset.path;
+                if (!p) return;
+                if (selectedPath === p) {
+                    selectedPath = '';
+                    clearHighlight();
+                } else {
+                    selectedPath = p;
+                    applyHighlight(resolveEntityByPath(getSceneRoot(), p));
+                }
+                renderSceneTree();
+                return;
+            }
+
+            var el = ev.target;
+            while (el && el !== materialsList && !(el.classList && el.classList.contains('scene-row'))) el = el.parentElement;
+            if (!el || el === materialsList) return;
+
+            var path = el.dataset.path;
+            var hasChildren = el.dataset.hasChildren === '1';
+            var depth = parseInt(el.dataset.depth, 10);
+            var q = (materialsSearch.value || '').trim();
+
+            if (!hasChildren && path) {
+                selectedPath = path;
+                applyHighlight(resolveEntityByPath(getSceneRoot(), path));
+                renderSceneTree();
+                return;
+            }
+
+            if (!q && hasChildren && depth > 0 && path) {
+                treeExpanded[path] = !treeExpanded[path];
+                renderSceneTree();
+            }
+        });
 
         var setActiveButton = function () {
             if (viewMode === 'first') {
@@ -314,10 +610,12 @@ pc.script.createLoadingScreen(function (app) {
         btnThird.addEventListener('pointerdown', swallow, { passive: false });
         btnFixed.addEventListener('pointerdown', swallow, { passive: false });
         btnFirst.addEventListener('pointerdown', swallow, { passive: false });
+        btnMaterials.addEventListener('pointerdown', swallow, { passive: false });
 
         btnThird.addEventListener('click', function () { setViewMode('third'); });
         btnFixed.addEventListener('click', function () { setViewMode('fixed'); });
         btnFirst.addEventListener('click', function () { setViewMode('first'); });
+        btnMaterials.addEventListener('click', function () { setMaterialsOpen(!isMaterialsOpen); });
 
         app.on('update', onUpdate);
 
@@ -549,6 +847,184 @@ pc.script.createLoadingScreen(function (app) {
             '',
             '.bottom-toolbar .toolbar-btn:active {',
             '    transform: translateY(1px);',
+            '}',
+            '',
+            '.bottom-toolbar .toolbar-sep {',
+            '    width: 1px;',
+            '    height: 26px;',
+            '    background: rgba(255, 255, 255, 0.18);',
+            '    align-self: center;',
+            '    margin: 0 2px;',
+            '    pointer-events: none;',
+            '}',
+            '',
+            '#materials-panel {',
+            '    position: fixed;',
+            '    top: 12px;',
+            '    right: 12px;',
+            '    width: 320px;',
+            '    max-width: calc(100vw - 24px);',
+            '    max-height: calc(100vh - 24px);',
+            '    display: flex;',
+            '    flex-direction: column;',
+            '    border-radius: 14px;',
+            '    background: rgba(16, 18, 20, 0.92);',
+            '    border: 1px solid rgba(255, 255, 255, 0.14);',
+            '    backdrop-filter: blur(10px);',
+            '    -webkit-backdrop-filter: blur(10px);',
+            '    z-index: 10002;',
+            '    overflow: hidden;',
+            '}',
+            '',
+            '#materials-panel .materials-header {',
+            '    display: flex;',
+            '    flex-direction: column;',
+            '    gap: 8px;',
+            '    padding: 12px 12px 10px 12px;',
+            '    border-bottom: 1px solid rgba(255, 255, 255, 0.10);',
+            '}',
+            '',
+            '#materials-panel .materials-title {',
+            '    color: rgba(255, 255, 255, 0.92);',
+            '    font-size: 13px;',
+            '    font-weight: 600;',
+            '    letter-spacing: 0.2px;',
+            '}',
+            '',
+            '#materials-panel .materials-search {',
+            '    width: 100%;',
+            '    height: 34px;',
+            '    border-radius: 10px;',
+            '    border: 1px solid rgba(255, 255, 255, 0.12);',
+            '    background: rgba(255, 255, 255, 0.06);',
+            '    color: rgba(255, 255, 255, 0.92);',
+            '    padding: 0 10px;',
+            '    outline: none;',
+            '    box-sizing: border-box;',
+            '}',
+            '',
+            '#materials-panel .materials-search::placeholder {',
+            '    color: rgba(255, 255, 255, 0.45);',
+            '}',
+            '',
+            '#materials-panel .materials-list {',
+            '    padding: 8px 8px 10px 8px;',
+            '    overflow: auto;',
+            '    flex: 1;',
+            '}',
+            '',
+            '#materials-panel .scene-row {',
+            '    display: flex;',
+            '    align-items: center;',
+            '    gap: 8px;',
+            '    padding-top: 8px;',
+            '    padding-bottom: 8px;',
+            '    border-radius: 10px;',
+            '    border: 1px solid rgba(255, 255, 255, 0.08);',
+            '    background: rgba(255, 255, 255, 0.03);',
+            '    margin: 0 0 8px 0;',
+            '    cursor: pointer;',
+            '    user-select: none;',
+            '}',
+            '',
+            '#materials-panel .scene-row:hover {',
+            '    background: rgba(255, 255, 255, 0.05);',
+            '}',
+            '',
+            '#materials-panel .scene-row.is-selected {',
+            '    background: rgba(0, 153, 255, 0.16);',
+            '    border-color: rgba(0, 153, 255, 0.38);',
+            '}',
+            '',
+            '#materials-panel .scene-toggle {',
+            '    width: 12px;',
+            '    height: 12px;',
+            '    flex: 0 0 12px;',
+            '    position: relative;',
+            '}',
+            '',
+            '#materials-panel .scene-toggle:before {',
+            '    content: "";',
+            '    position: absolute;',
+            '    top: 1px;',
+            '    left: 3px;',
+            '    width: 0;',
+            '    height: 0;',
+            '    border-style: solid;',
+            '    border-width: 5px 0 5px 6px;',
+            '    border-color: transparent transparent transparent rgba(255, 255, 255, 0.70);',
+            '    transform-origin: 2px 5px;',
+            '}',
+            '',
+            '#materials-panel .scene-toggle.is-open:before {',
+            '    transform: rotate(90deg);',
+            '}',
+            '',
+            '#materials-panel .scene-toggle.is-leaf:before {',
+            '    border-width: 0;',
+            '}',
+            '',
+            '#materials-panel .scene-name {',
+            '    color: rgba(255, 255, 255, 0.92);',
+            '    font-size: 13px;',
+            '    line-height: 1.2;',
+            '    word-break: break-word;',
+            '    flex: 1;',
+            '}',
+            '',
+            '#materials-panel .scene-name.is-match {',
+            '    color: rgba(0, 153, 255, 0.95);',
+            '}',
+            '',
+            '#materials-panel .scene-eye {',
+            '    margin-left: auto;',
+            '    width: 28px;',
+            '    height: 28px;',
+            '    border-radius: 10px;',
+            '    border: 1px solid rgba(255, 255, 255, 0.12);',
+            '    background: rgba(255, 255, 255, 0.05);',
+            '    display: inline-flex;',
+            '    align-items: center;',
+            '    justify-content: center;',
+            '    padding: 0;',
+            '    cursor: pointer;',
+            '}',
+            '',
+            '#materials-panel .scene-eye svg {',
+            '    width: 18px;',
+            '    height: 18px;',
+            '    fill: none;',
+            '    stroke: rgba(255, 255, 255, 0.80);',
+            '    stroke-width: 1.8;',
+            '    stroke-linecap: round;',
+            '    stroke-linejoin: round;',
+            '}',
+            '',
+            '#materials-panel .materials-row {',
+            '    padding: 10px 10px;',
+            '    border-radius: 12px;',
+            '    border: 1px solid rgba(255, 255, 255, 0.08);',
+            '    background: rgba(255, 255, 255, 0.03);',
+            '    margin: 0 0 8px 0;',
+            '}',
+            '',
+            '#materials-panel .materials-name {',
+            '    color: rgba(255, 255, 255, 0.92);',
+            '    font-size: 13px;',
+            '    line-height: 1.2;',
+            '    word-break: break-word;',
+            '}',
+            '',
+            '#materials-panel .materials-meta {',
+            '    color: rgba(255, 255, 255, 0.55);',
+            '    font-size: 12px;',
+            '    margin-top: 4px;',
+            '}',
+            '',
+            '#materials-panel .materials-empty {',
+            '    color: rgba(255, 255, 255, 0.55);',
+            '    font-size: 12px;',
+            '    padding: 12px 10px;',
             '}',
             '',
             '#progress-bar-container {',
