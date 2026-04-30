@@ -161,14 +161,31 @@ pc.script.createLoadingScreen(function (app) {
             if (!cameraEntity || !playerEntity) return;
 
             var p = playerEntity.getPosition();
-            var f = playerEntity.forward;
-            var r = playerEntity.right;
+            var robotPathMove = playerEntity.script && playerEntity.script.robotPathMove ? playerEntity.script.robotPathMove : null;
+            var facingEntity = robotPathMove && robotPathMove.animEntity ? robotPathMove.animEntity : playerEntity;
 
-            var followBack = 9.5;
-            var followUp = 3.2;
-            var followRight = 1.1;
-            var lookAhead = 18.0;
-            var lookUp = 2.4;
+            var lookDir = null;
+            if (robotPathMove && robotPathMove._lookDir && robotPathMove._lookDir.lengthSq && robotPathMove._lookDir.lengthSq() > 1e-6) {
+                lookDir = robotPathMove._lookDir;
+            } else {
+                lookDir = facingEntity.forward;
+            }
+
+            var f = new pc.Vec3(lookDir.x, 0, lookDir.z);
+            if (f.lengthSq() < 1e-6) {
+                var fallbackForward = playerEntity.forward;
+                f.set(fallbackForward.x, 0, fallbackForward.z);
+            }
+            f.normalize();
+
+            var r = new pc.Vec3();
+            r.cross(pc.Vec3.UP, f).normalize();
+
+            var followBack = 4.75;
+            var followUp = 2.4;
+            var followRight = 0.55;
+            var lookAhead = 38.0;
+            var lookUp = 3.2;
 
             var camPos = new pc.Vec3(
                 p.x - f.x * followBack + r.x * followRight,
