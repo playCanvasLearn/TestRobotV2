@@ -141,6 +141,47 @@ pc.script.createLoadingScreen(function (app) {
             return svg;
         }
 
+        if (type === 'tv') {
+            var r1 = document.createElementNS(ns, 'rect');
+            r1.setAttribute('x', '4');
+            r1.setAttribute('y', '6');
+            r1.setAttribute('width', '16');
+            r1.setAttribute('height', '11');
+            r1.setAttribute('rx', '2');
+            r1.setAttribute('ry', '2');
+            svg.appendChild(r1);
+            var s1 = document.createElementNS(ns, 'path');
+            s1.setAttribute('d', 'M9 20h6');
+            svg.appendChild(s1);
+            var s2 = document.createElementNS(ns, 'path');
+            s2.setAttribute('d', 'M12 17v3');
+            svg.appendChild(s2);
+            return svg;
+        }
+
+        if (type === 'fence') {
+            var f1 = document.createElementNS(ns, 'path');
+            f1.setAttribute('d', 'M4 20V7m4 13V7m4 13V7m4 13V7m4 13V7');
+            svg.appendChild(f1);
+            var f2 = document.createElementNS(ns, 'path');
+            f2.setAttribute('d', 'M3 10h18M3 14h18');
+            svg.appendChild(f2);
+            return svg;
+        }
+
+        if (type === 'floor') {
+            var g1 = document.createElementNS(ns, 'path');
+            g1.setAttribute('d', 'M4 10l8-4l8 4l-8 4l-8-4z');
+            svg.appendChild(g1);
+            var g2 = document.createElementNS(ns, 'path');
+            g2.setAttribute('d', 'M4 14l8 4l8-4');
+            svg.appendChild(g2);
+            var g3 = document.createElementNS(ns, 'path');
+            g3.setAttribute('d', 'M12 10v8');
+            svg.appendChild(g3);
+            return svg;
+        }
+
         var head = document.createElementNS(ns, 'path');
         head.setAttribute('d', 'M12 12a4 4 0 1 0-4-4a4 4 0 0 0 4 4');
         svg.appendChild(head);
@@ -187,11 +228,32 @@ pc.script.createLoadingScreen(function (app) {
         btnMaterials.setAttribute('aria-label', '查看场景物品');
         btnMaterials.appendChild(createIconSvg('materials'));
 
+        var btnHideTv = document.createElement('button');
+        btnHideTv.type = 'button';
+        btnHideTv.className = 'toolbar-btn toolbar-btn-hide-tv';
+        btnHideTv.setAttribute('aria-label', '隐藏电视');
+        btnHideTv.appendChild(createIconSvg('tv'));
+
+        var btnHideFence = document.createElement('button');
+        btnHideFence.type = 'button';
+        btnHideFence.className = 'toolbar-btn toolbar-btn-hide-fence';
+        btnHideFence.setAttribute('aria-label', '隐藏围栏');
+        btnHideFence.appendChild(createIconSvg('fence'));
+
+        var btnHideFloor = document.createElement('button');
+        btnHideFloor.type = 'button';
+        btnHideFloor.className = 'toolbar-btn toolbar-btn-hide-floor';
+        btnHideFloor.setAttribute('aria-label', '隐藏地板');
+        btnHideFloor.appendChild(createIconSvg('floor'));
+
         toolbar.appendChild(btnThird);
         toolbar.appendChild(btnFixed);
         toolbar.appendChild(btnFirst);
         toolbar.appendChild(toolbarSep);
         toolbar.appendChild(btnMaterials);
+        toolbar.appendChild(btnHideTv);
+        toolbar.appendChild(btnHideFence);
+        toolbar.appendChild(btnHideFloor);
         document.body.appendChild(toolbar);
 
         var canvas = document.getElementById('application-canvas');
@@ -202,6 +264,9 @@ pc.script.createLoadingScreen(function (app) {
 
         var viewMode = 'third';
         var isMaterialsOpen = false;
+        var isTvHidden = false;
+        var isFenceHidden = false;
+        var isFloorHidden = false;
 
         var materialsPanel = document.createElement('div');
         materialsPanel.id = 'materials-panel';
@@ -271,6 +336,11 @@ pc.script.createLoadingScreen(function (app) {
         var treeExpanded = Object.create(null);
         var selectedPath = '';
         var highlighted = null;
+        var tvTargets = null;
+        var fenceTargets = null;
+        var floorTargets = null;
+        var hiddenEntities = Object.create(null);
+        var hiddenMeshInstances = Object.create(null);
 
         var findByNameLower = function (root, nameLower) {
             if (!root) return null;
@@ -304,6 +374,111 @@ pc.script.createLoadingScreen(function (app) {
                 node = node.children[idx];
             }
             return node;
+        };
+
+        var getEntityId = function (e) {
+            if (!e) return '';
+            if (e.getGuid) return e.getGuid();
+            if (e._guid) return e._guid;
+            return e.name || '';
+        };
+
+        var getMeshInstanceId = function (mi) {
+            if (!mi) return '';
+            if (mi.id !== undefined) return String(mi.id);
+            if (mi._id !== undefined) return String(mi._id);
+            var n = mi.node && mi.node.name ? mi.node.name : '';
+            var m = mi.mesh && mi.mesh.name ? mi.mesh.name : '';
+            return n + '|' + m;
+        };
+
+        var addHiddenEntity = function (e) {
+            var id = getEntityId(e);
+            if (!id) return;
+            var rec = hiddenEntities[id];
+            if (!rec) {
+                rec = { count: 0, enabled: e.enabled, entity: e };
+                hiddenEntities[id] = rec;
+            }
+            rec.entity = e;
+            rec.count++;
+            e.enabled = false;
+        };
+
+        var removeHiddenEntity = function (e) {
+            var id = getEntityId(e);
+            if (!id) return;
+            var rec = hiddenEntities[id];
+            if (!rec) return;
+            rec.count--;
+            if (rec.count <= 0) {
+                if (rec.entity) rec.entity.enabled = rec.enabled;
+                delete hiddenEntities[id];
+            }
+        };
+
+        var addHiddenMeshInstance = function (mi) {
+            var id = getMeshInstanceId(mi);
+            if (!id) return;
+            var rec = hiddenMeshInstances[id];
+            if (!rec) {
+                rec = { count: 0, visible: mi.visible, mi: mi };
+                hiddenMeshInstances[id] = rec;
+            }
+            rec.mi = mi;
+            rec.count++;
+            mi.visible = false;
+        };
+
+        var removeHiddenMeshInstance = function (mi) {
+            var id = getMeshInstanceId(mi);
+            if (!id) return;
+            var rec = hiddenMeshInstances[id];
+            if (!rec) return;
+            rec.count--;
+            if (rec.count <= 0) {
+                if (rec.mi) rec.mi.visible = rec.visible;
+                delete hiddenMeshInstances[id];
+            }
+        };
+
+        var collectTargetsByNames = function (names) {
+            var set = Object.create(null);
+            for (var i = 0; i < names.length; i++) set[names[i]] = true;
+            var entities = [];
+            var meshInstances = [];
+            app.root.forEach(function (node) {
+                if (set[node.name]) entities.push(node);
+
+                var mis = null;
+                if (node.render && node.render.meshInstances) mis = node.render.meshInstances;
+                else if (node.model && node.model.meshInstances) mis = node.model.meshInstances;
+                if (!mis || !mis.length) return;
+
+                for (var j = 0; j < mis.length; j++) {
+                    var mi = mis[j];
+                    var n1 = mi && mi.node && mi.node.name ? mi.node.name : '';
+                    var n2 = mi && mi.mesh && mi.mesh.name ? mi.mesh.name : '';
+                    if (set[n1] || set[n2]) meshInstances.push(mi);
+                }
+            });
+            return { entities: entities, meshInstances: meshInstances };
+        };
+
+        var hideTargets = function (targets) {
+            if (!targets) return;
+            var es = targets.entities || [];
+            for (var i = 0; i < es.length; i++) addHiddenEntity(es[i]);
+            var ms = targets.meshInstances || [];
+            for (var j = 0; j < ms.length; j++) addHiddenMeshInstance(ms[j]);
+        };
+
+        var showTargets = function (targets) {
+            if (!targets) return;
+            var es = targets.entities || [];
+            for (var i = 0; i < es.length; i++) removeHiddenEntity(es[i]);
+            var ms = targets.meshInstances || [];
+            for (var j = 0; j < ms.length; j++) removeHiddenMeshInstance(ms[j]);
         };
 
         var clearHighlight = function () {
@@ -611,11 +786,64 @@ pc.script.createLoadingScreen(function (app) {
         btnFixed.addEventListener('pointerdown', swallow, { passive: false });
         btnFirst.addEventListener('pointerdown', swallow, { passive: false });
         btnMaterials.addEventListener('pointerdown', swallow, { passive: false });
+        btnHideTv.addEventListener('pointerdown', swallow, { passive: false });
+        btnHideFence.addEventListener('pointerdown', swallow, { passive: false });
+        btnHideFloor.addEventListener('pointerdown', swallow, { passive: false });
 
         btnThird.addEventListener('click', function () { setViewMode('third'); });
         btnFixed.addEventListener('click', function () { setViewMode('fixed'); });
         btnFirst.addEventListener('click', function () { setViewMode('first'); });
         btnMaterials.addEventListener('click', function () { setMaterialsOpen(!isMaterialsOpen); });
+        btnHideTv.addEventListener('click', function () {
+            var tvNames = [
+                'Mesh_368', 'Mesh_369', 'Mesh_370', 'Mesh_371', 'Mesh_372', 'Mesh_373', 'Mesh_374', 'Mesh_375', 'Mesh_376',
+                'Mesh_377', 'Mesh_378', 'Mesh_379', 'Mesh_380', 'Mesh_381', '屏幕'
+            ];
+            isTvHidden = !isTvHidden;
+            if (isTvHidden) {
+                btnHideTv.classList.add('is-active');
+                tvTargets = collectTargetsByNames(tvNames);
+                hideTargets(tvTargets);
+            } else {
+                btnHideTv.classList.remove('is-active');
+                showTargets(tvTargets);
+                tvTargets = null;
+            }
+        });
+        btnHideFence.addEventListener('click', function () {
+            var fenceNames = [
+                'Mesh_106', 'Mesh_77', 'Mesh_55', 'Mesh_63', 'Mesh_155', 'Mesh_60', 'Mesh_110', 'Mesh_145', 'Mesh_156', 'Mesh_153', 'Mesh_154',
+                'Mesh_75', 'Mesh_80', 'Mesh_85', 'Mesh_90', 'Mesh_96', 'Mesh_101', 'Mesh_103', 'Mesh_113',
+                'Mesh_48', 'Mesh_53', 'Mesh_58', 'Mesh_62', 'Mesh_64', 'Mesh_66', 'Mesh_68', 'Mesh_69', 'Mesh_71', 'Mesh_72', 'Mesh_76', 'Mesh_78',
+                'Mesh_88', 'Mesh_91', 'Mesh_93', 'Mesh_98', 'Mesh_100', 'Mesh_105', 'Mesh_107', 'Mesh_109', 'Mesh_111', 'Mesh_115', 'Mesh_119',
+                'Mesh_44', 'Mesh_59', 'Mesh_81', 'Mesh_83', 'Mesh_86', 'Mesh_95',
+                'Mesh_40', 'Mesh_49', 'Mesh_54', 'Mesh_57', 'Mesh_62', 'Mesh_67', 'Mesh_73'
+            ];
+            isFenceHidden = !isFenceHidden;
+            if (isFenceHidden) {
+                btnHideFence.classList.add('is-active');
+                fenceTargets = collectTargetsByNames(fenceNames);
+                hideTargets(fenceTargets);
+            } else {
+                btnHideFence.classList.remove('is-active');
+                showTargets(fenceTargets);
+                fenceTargets = null;
+            }
+        });
+
+        btnHideFloor.addEventListener('click', function () {
+            var floorNames = ['Mesh_383'];
+            isFloorHidden = !isFloorHidden;
+            if (isFloorHidden) {
+                btnHideFloor.classList.add('is-active');
+                floorTargets = collectTargetsByNames(floorNames);
+                hideTargets(floorTargets);
+            } else {
+                btnHideFloor.classList.remove('is-active');
+                showTargets(floorTargets);
+                floorTargets = null;
+            }
+        });
 
         app.on('update', onUpdate);
 
