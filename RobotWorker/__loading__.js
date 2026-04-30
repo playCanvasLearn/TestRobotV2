@@ -98,6 +98,24 @@ pc.script.createLoadingScreen(function (app) {
             return svg;
         }
 
+        if (type === 'fixed') {
+            var rect = document.createElementNS(ns, 'rect');
+            rect.setAttribute('x', '3');
+            rect.setAttribute('y', '7');
+            rect.setAttribute('width', '18');
+            rect.setAttribute('height', '12');
+            rect.setAttribute('rx', '2');
+            rect.setAttribute('ry', '2');
+            svg.appendChild(rect);
+
+            var dot = document.createElementNS(ns, 'circle');
+            dot.setAttribute('cx', '12');
+            dot.setAttribute('cy', '13');
+            dot.setAttribute('r', '2');
+            svg.appendChild(dot);
+            return svg;
+        }
+
         var head = document.createElementNS(ns, 'path');
         head.setAttribute('d', 'M12 12a4 4 0 1 0-4-4a4 4 0 0 0 4 4');
         svg.appendChild(head);
@@ -122,13 +140,20 @@ pc.script.createLoadingScreen(function (app) {
         btnThird.setAttribute('aria-label', '第三人称视图');
         btnThird.appendChild(createIconSvg('third'));
 
+        var btnFixed = document.createElement('button');
+        btnFixed.type = 'button';
+        btnFixed.className = 'toolbar-btn';
+        btnFixed.setAttribute('aria-label', '固定视图');
+        btnFixed.appendChild(createIconSvg('fixed'));
+
         var btnFirst = document.createElement('button');
         btnFirst.type = 'button';
         btnFirst.className = 'toolbar-btn';
-        btnFirst.setAttribute('aria-label', '第一人称视图');
+        btnFirst.setAttribute('aria-label', '第一人称(眼部)');
         btnFirst.appendChild(createIconSvg('first'));
 
         toolbar.appendChild(btnThird);
+        toolbar.appendChild(btnFixed);
         toolbar.appendChild(btnFirst);
         document.body.appendChild(toolbar);
 
@@ -140,13 +165,55 @@ pc.script.createLoadingScreen(function (app) {
 
         var viewMode = 'third';
 
+        var tmpForward = new pc.Vec3();
+        var tmpRight = new pc.Vec3();
+        var tmpCamPos = new pc.Vec3();
+        var tmpLookPos = new pc.Vec3();
+        var tmpEyePos = new pc.Vec3();
+        var tmpOffset = new pc.Vec3();
+
+        var findChildByNameIncludes = function (root, token) {
+            if (!root || !token) return null;
+            var stack = [root];
+            var t = token.toLowerCase();
+            while (stack.length) {
+                var e = stack.pop();
+                if (e !== root) {
+                    var n = (e.name || '').toLowerCase();
+                    if (n.indexOf(t) !== -1) return e;
+                }
+                var children = e.children;
+                for (var i = 0; i < children.length; i++) stack.push(children[i]);
+            }
+            return null;
+        };
+
+        var findEyeMount = function (root) {
+            return (
+                findChildByNameIncludes(root, 'eye') ||
+                findChildByNameIncludes(root, '眼') ||
+                findChildByNameIncludes(root, 'head') ||
+                findChildByNameIncludes(root, '头') ||
+                findChildByNameIncludes(root, 'camera') ||
+                findChildByNameIncludes(root, 'view')
+            );
+        };
+
+        var eyeMount = null;
+
         var setActiveButton = function () {
             if (viewMode === 'first') {
                 btnFirst.classList.add('is-active');
                 btnThird.classList.remove('is-active');
+                btnFixed.classList.remove('is-active');
+            } else if (viewMode === 'fixed') {
+                btnFixed.classList.add('is-active');
+                btnThird.classList.remove('is-active');
+                btnFirst.classList.remove('is-active');
             } else {
                 btnThird.classList.add('is-active');
                 btnFirst.classList.remove('is-active');
+                btnFixed.classList.remove('is-active');
             }
         };
 
@@ -157,7 +224,14 @@ pc.script.createLoadingScreen(function (app) {
         };
 
         var onUpdate = function () {
-            if (viewMode !== 'first') return;
+            if (viewMode !== 'fixed' && viewMode !== 'first') return;
+
+            if (!cameraEntity) {
+                cameraEntity = app.root.findByName('Camera');
+                orbitScript = cameraEntity && cameraEntity.script && cameraEntity.script.cameraOrbitZoom ? cameraEntity.script.cameraOrbitZoom : null;
+                if (orbitScript) orbitScript.enabled = false;
+            }
+            if (!playerEntity) playerEntity = app.root.findByName('player');
             if (!cameraEntity || !playerEntity) return;
 
             var p = playerEntity.getPosition();
@@ -171,50 +245,63 @@ pc.script.createLoadingScreen(function (app) {
                 lookDir = facingEntity.forward;
             }
 
-            var f = new pc.Vec3(lookDir.x, 0, lookDir.z);
-            if (f.lengthSq() < 1e-6) {
+            tmpForward.set(lookDir.x, 0, lookDir.z);
+            if (tmpForward.lengthSq() < 1e-6) {
                 var fallbackForward = playerEntity.forward;
-                f.set(fallbackForward.x, 0, fallbackForward.z);
+                tmpForward.set(fallbackForward.x, 0, fallbackForward.z);
             }
-            f.normalize();
+            tmpForward.normalize();
 
-            var r = new pc.Vec3();
-            r.cross(pc.Vec3.UP, f).normalize();
+            if (viewMode === 'fixed') {
+                tmpRight.cross(pc.Vec3.UP, tmpForward).normalize();
 
-            var followBack = 4.75;
-            var followUp = 2.4;
-            var followRight = 0.55;
-            var lookAhead = 38.0;
-            var lookUp = 3.2;
+                var followBack = 4.75;
+                var followUp = 2.4;
+                var followRight = 0.55;
+                var lookAhead = 38.0;
+                var lookUp = 3.2;
 
-            var camPos = new pc.Vec3(
-                p.x - f.x * followBack + r.x * followRight,
-                p.y + followUp,
-                p.z - f.z * followBack + r.z * followRight
-            );
+                tmpCamPos.set(
+                    p.x - tmpForward.x * followBack + tmpRight.x * followRight,
+                    p.y + followUp,
+                    p.z - tmpForward.z * followBack + tmpRight.z * followRight
+                );
 
-            var lookPos = new pc.Vec3(
-                p.x + f.x * lookAhead,
-                p.y + lookUp,
-                p.z + f.z * lookAhead
-            );
+                tmpLookPos.set(
+                    p.x + tmpForward.x * lookAhead,
+                    p.y + lookUp,
+                    p.z + tmpForward.z * lookAhead
+                );
 
-            cameraEntity.setPosition(camPos);
-            cameraEntity.lookAt(lookPos);
+                cameraEntity.setPosition(tmpCamPos);
+                cameraEntity.lookAt(tmpLookPos);
+                return;
+            }
+
+            if (!eyeMount) eyeMount = findEyeMount(facingEntity) || findEyeMount(playerEntity);
+            if (eyeMount) {
+                tmpEyePos.copy(eyeMount.getPosition());
+            } else {
+                tmpEyePos.set(p.x, p.y + 1.75, p.z);
+            }
+
+            tmpOffset.copy(tmpForward).scale(0.25);
+            tmpCamPos.copy(tmpEyePos).add(tmpOffset);
+
+            tmpOffset.copy(tmpForward).scale(20.0);
+            tmpLookPos.copy(tmpCamPos).add(tmpOffset);
+            tmpLookPos.y += 0.6;
+
+            cameraEntity.setPosition(tmpCamPos);
+            cameraEntity.lookAt(tmpLookPos);
         };
 
         var setViewMode = function (mode) {
             if (mode === viewMode) return;
             viewMode = mode;
 
-            if (viewMode === 'first') {
-                if (orbitScript) orbitScript.enabled = false;
-                app.on('update', onUpdate);
-            } else {
-                exitPointerLock();
-                app.off('update', onUpdate);
-                if (orbitScript) orbitScript.enabled = true;
-            }
+            if (viewMode !== 'first') exitPointerLock();
+            if (orbitScript) orbitScript.enabled = (viewMode === 'third');
 
             setActiveButton();
         };
@@ -225,10 +312,14 @@ pc.script.createLoadingScreen(function (app) {
         };
 
         btnThird.addEventListener('pointerdown', swallow, { passive: false });
+        btnFixed.addEventListener('pointerdown', swallow, { passive: false });
         btnFirst.addEventListener('pointerdown', swallow, { passive: false });
 
         btnThird.addEventListener('click', function () { setViewMode('third'); });
+        btnFixed.addEventListener('click', function () { setViewMode('fixed'); });
         btnFirst.addEventListener('click', function () { setViewMode('first'); });
+
+        app.on('update', onUpdate);
 
     };
 
