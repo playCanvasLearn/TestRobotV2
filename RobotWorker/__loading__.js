@@ -303,6 +303,7 @@ pc.script.createLoadingScreen(function (app) {
         var tmpLookPos = new pc.Vec3();
         var tmpEyePos = new pc.Vec3();
         var tmpOffset = new pc.Vec3();
+        var tmpMoveDir = new pc.Vec3();
 
         var findChildByNameIncludes = function (root, token) {
             if (!root || !token) return null;
@@ -750,20 +751,33 @@ pc.script.createLoadingScreen(function (app) {
             cameraEntity.lookAt(tmpLookPos);
         };
 
-        var updateEyeCamera = function (p, facingEntity) {
-            if (!eyeMount) eyeMount = findEyeMount(facingEntity) || findEyeMount(playerEntity);
-            if (eyeMount) {
-                tmpEyePos.copy(eyeMount.getPosition());
-            } else {
-                tmpEyePos.set(p.x, p.y + 1.75, p.z);
-            }
+        var updateFirstCamera = function (p, facingEntity) {
+            // 1.75  2.2 增加相机高度
+            tmpEyePos.set(p.x, p.y + 2.2, p.z);
 
-            tmpOffset.copy(tmpForward).scale(0.25);
+            var firstCameraBackEnabled = true;
+            var firstCameraFollowBack = -0.2//1.2;
+            var firstCameraForwardOffset = 0.25;
+
+            tmpOffset.copy(tmpForward).scale(firstCameraForwardOffset);
             tmpCamPos.copy(tmpEyePos).add(tmpOffset);
+
+            if (firstCameraBackEnabled) {
+                var robotPathMove = playerEntity.script && playerEntity.script.robotPathMove ? playerEntity.script.robotPathMove : null;
+                if (robotPathMove && robotPathMove._moveDir && robotPathMove._moveDir.lengthSq && robotPathMove._moveDir.lengthSq() > 1e-6) {
+                    tmpMoveDir.set(robotPathMove._moveDir.x, 0, robotPathMove._moveDir.z).normalize();
+                } else {
+                    tmpMoveDir.copy(tmpForward);
+                }
+
+                tmpOffset.copy(tmpMoveDir).scale(-firstCameraFollowBack);
+                tmpCamPos.add(tmpOffset);
+            }
 
             tmpOffset.copy(tmpForward).scale(20.0);
             tmpLookPos.copy(tmpCamPos).add(tmpOffset);
-            tmpLookPos.y += 0.6;
+            // 0.6  -1.2 增加相机与地板的角度。值越小角度越大
+            tmpLookPos.y += -1.2;
 
             cameraEntity.setPosition(tmpCamPos);
             cameraEntity.lookAt(tmpLookPos);
@@ -781,7 +795,7 @@ pc.script.createLoadingScreen(function (app) {
                 return;
             }
 
-            updateEyeCamera(p, facingEntity);
+            updateFirstCamera(p, facingEntity);
         };
 
         var setViewMode = function (mode) {
