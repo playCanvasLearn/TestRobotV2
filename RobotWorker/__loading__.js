@@ -194,67 +194,96 @@ pc.script.createLoadingScreen(function (app) {
     var initViewToolbar = function () {
         if (document.getElementById(TOOLBAR_ID)) return;
 
-        var toolbar = document.createElement('div');
-        toolbar.className = 'bottom-toolbar';
-        toolbar.id = TOOLBAR_ID;
-        toolbar.setAttribute('role', 'toolbar');
-        toolbar.setAttribute('aria-label', '视图切换');
+        var createToolbarButton = function (label, iconType, className, isActive) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'toolbar-btn' + (className ? (' ' + className) : '') + (isActive ? ' is-active' : '');
+            btn.setAttribute('aria-label', label);
+            btn.appendChild(createIconSvg(iconType));
+            return btn;
+        };
 
-        var btnThird = document.createElement('button');
-        btnThird.type = 'button';
-        btnThird.className = 'toolbar-btn is-active';
-        btnThird.setAttribute('aria-label', '第三人称视图');
-        btnThird.appendChild(createIconSvg('third'));
+        var createToolbarSeparator = function () {
+            var sep = document.createElement('div');
+            sep.className = 'toolbar-sep';
+            sep.setAttribute('aria-hidden', 'true');
+            return sep;
+        };
 
-        var btnFixed = document.createElement('button');
-        btnFixed.type = 'button';
-        btnFixed.className = 'toolbar-btn';
-        btnFixed.setAttribute('aria-label', '固定视图');
-        btnFixed.appendChild(createIconSvg('fixed'));
+        var createToolbarUi = function () {
+            var toolbar = document.createElement('div');
+            toolbar.className = 'bottom-toolbar';
+            toolbar.id = TOOLBAR_ID;
+            toolbar.setAttribute('role', 'toolbar');
+            toolbar.setAttribute('aria-label', '工具栏');
 
-        var btnFirst = document.createElement('button');
-        btnFirst.type = 'button';
-        btnFirst.className = 'toolbar-btn';
-        btnFirst.setAttribute('aria-label', '第一人称(眼部)');
-        btnFirst.appendChild(createIconSvg('first'));
+            var btnThird = createToolbarButton('固定视角', 'third', '', true);
+            var btnFixed = createToolbarButton('第三人称视角', 'fixed', '');
+            var btnFirst = createToolbarButton('第一人称视角', 'first', '');
 
-        var toolbarSep = document.createElement('div');
-        toolbarSep.className = 'toolbar-sep';
-        toolbarSep.setAttribute('aria-hidden', 'true');
+            var btnScene = createToolbarButton('查看场景物品', 'materials', 'toolbar-btn-materials');
+            var btnHideTv = createToolbarButton('隐藏电视', 'tv', 'toolbar-btn-hide-tv');
+            var btnHideFence = createToolbarButton('隐藏围栏', 'fence', 'toolbar-btn-hide-fence');
+            var btnHideFloor = createToolbarButton('隐藏地板', 'floor', 'toolbar-btn-hide-floor');
+            
+            toolbar.appendChild(btnThird);
+            toolbar.appendChild(btnFixed);
+            toolbar.appendChild(btnFirst);
+            toolbar.appendChild(createToolbarSeparator());
+            toolbar.appendChild(btnScene);
+            toolbar.appendChild(btnHideTv);
+            toolbar.appendChild(btnHideFence);
+            toolbar.appendChild(btnHideFloor);
 
-        var btnMaterials = document.createElement('button');
-        btnMaterials.type = 'button';
-        btnMaterials.className = 'toolbar-btn toolbar-btn-materials';
-        btnMaterials.setAttribute('aria-label', '查看场景物品');
-        btnMaterials.appendChild(createIconSvg('materials'));
+            document.body.appendChild(toolbar);
 
-        var btnHideTv = document.createElement('button');
-        btnHideTv.type = 'button';
-        btnHideTv.className = 'toolbar-btn toolbar-btn-hide-tv';
-        btnHideTv.setAttribute('aria-label', '隐藏电视');
-        btnHideTv.appendChild(createIconSvg('tv'));
+            return {
+                toolbar: toolbar,
+                btnThird: btnThird,
+                btnFixed: btnFixed,
+                btnFirst: btnFirst,
+                btnScene: btnScene,
+                btnHideTv: btnHideTv,
+                btnHideFence: btnHideFence,
+                btnHideFloor: btnHideFloor
+            };
+        };
 
-        var btnHideFence = document.createElement('button');
-        btnHideFence.type = 'button';
-        btnHideFence.className = 'toolbar-btn toolbar-btn-hide-fence';
-        btnHideFence.setAttribute('aria-label', '隐藏围栏');
-        btnHideFence.appendChild(createIconSvg('fence'));
+        var createScenePanelUi = function () {
+            var panel = document.createElement('div');
+            panel.id = 'materials-panel';
+            panel.setAttribute('role', 'dialog');
+            panel.setAttribute('aria-label', '场景物品');
+            panel.style.display = 'none';
 
-        var btnHideFloor = document.createElement('button');
-        btnHideFloor.type = 'button';
-        btnHideFloor.className = 'toolbar-btn toolbar-btn-hide-floor';
-        btnHideFloor.setAttribute('aria-label', '隐藏地板');
-        btnHideFloor.appendChild(createIconSvg('floor'));
+            var header = document.createElement('div');
+            header.className = 'materials-header';
 
-        toolbar.appendChild(btnThird);
-        toolbar.appendChild(btnFixed);
-        toolbar.appendChild(btnFirst);
-        toolbar.appendChild(toolbarSep);
-        toolbar.appendChild(btnMaterials);
-        toolbar.appendChild(btnHideTv);
-        toolbar.appendChild(btnHideFence);
-        toolbar.appendChild(btnHideFloor);
-        document.body.appendChild(toolbar);
+            var title = document.createElement('div');
+            title.className = 'materials-title';
+            title.innerText = '场景物品';
+
+            var search = document.createElement('input');
+            search.className = 'materials-search';
+            search.type = 'search';
+            search.placeholder = '搜索物品名称';
+            search.autocomplete = 'off';
+            search.spellcheck = false;
+
+            var list = document.createElement('div');
+            list.className = 'materials-list';
+
+            header.appendChild(title);
+            header.appendChild(search);
+            panel.appendChild(header);
+            panel.appendChild(list);
+            document.body.appendChild(panel);
+
+            return { panel: panel, search: search, list: list };
+        };
+
+        var ui = createToolbarUi();
+        var sceneUi = createScenePanelUi();
 
         var canvas = document.getElementById('application-canvas');
 
@@ -263,39 +292,10 @@ pc.script.createLoadingScreen(function (app) {
         var orbitScript = cameraEntity && cameraEntity.script && cameraEntity.script.cameraOrbitZoom ? cameraEntity.script.cameraOrbitZoom : null;
 
         var viewMode = 'third';
-        var isMaterialsOpen = false;
+        var isSceneOpen = false;
         var isTvHidden = false;
         var isFenceHidden = false;
         var isFloorHidden = false;
-
-        var materialsPanel = document.createElement('div');
-        materialsPanel.id = 'materials-panel';
-        materialsPanel.setAttribute('role', 'dialog');
-        materialsPanel.setAttribute('aria-label', '场景物品');
-        materialsPanel.style.display = 'none';
-
-        var materialsHeader = document.createElement('div');
-        materialsHeader.className = 'materials-header';
-
-        var materialsTitle = document.createElement('div');
-        materialsTitle.className = 'materials-title';
-        materialsTitle.innerText = '场景物品';
-
-        var materialsSearch = document.createElement('input');
-        materialsSearch.className = 'materials-search';
-        materialsSearch.type = 'search';
-        materialsSearch.placeholder = '搜索物品名称';
-        materialsSearch.autocomplete = 'off';
-        materialsSearch.spellcheck = false;
-
-        var materialsList = document.createElement('div');
-        materialsList.className = 'materials-list';
-
-        materialsHeader.appendChild(materialsTitle);
-        materialsHeader.appendChild(materialsSearch);
-        materialsPanel.appendChild(materialsHeader);
-        materialsPanel.appendChild(materialsList);
-        document.body.appendChild(materialsPanel);
 
         var tmpForward = new pc.Vec3();
         var tmpRight = new pc.Vec3();
@@ -531,16 +531,16 @@ pc.script.createLoadingScreen(function (app) {
         };
 
         var renderSceneTree = function () {
-            var q = (materialsSearch.value || '').trim().toLowerCase();
+            var q = (sceneUi.search.value || '').trim().toLowerCase();
             var root = getSceneRoot();
 
-            materialsList.textContent = '';
+            sceneUi.list.textContent = '';
 
             if (!root) {
                 var empty0 = document.createElement('div');
                 empty0.className = 'materials-empty';
                 empty0.innerText = '未找到 SceneRoot';
-                materialsList.appendChild(empty0);
+                sceneUi.list.appendChild(empty0);
                 return;
             }
 
@@ -583,7 +583,7 @@ pc.script.createLoadingScreen(function (app) {
                     row.appendChild(eyeBtn);
                 }
 
-                materialsList.appendChild(row);
+                sceneUi.list.appendChild(row);
 
                 if (!hasChildren) return;
                 if (!expanded) return;
@@ -599,34 +599,34 @@ pc.script.createLoadingScreen(function (app) {
                 var empty = document.createElement('div');
                 empty.className = 'materials-empty';
                 empty.innerText = '无匹配物品';
-                materialsList.appendChild(empty);
+                sceneUi.list.appendChild(empty);
             }
         };
 
-        var setMaterialsOpen = function (open) {
-            if (open === isMaterialsOpen) return;
-            isMaterialsOpen = open;
-            if (isMaterialsOpen) {
-                btnMaterials.classList.add('is-active');
-                materialsPanel.style.display = '';
+        var setSceneOpen = function (open) {
+            if (open === isSceneOpen) return;
+            isSceneOpen = open;
+            if (isSceneOpen) {
+                ui.btnScene.classList.add('is-active');
+                sceneUi.panel.style.display = '';
                 renderSceneTree();
-                materialsSearch.focus();
-                materialsSearch.select();
+                sceneUi.search.focus();
+                sceneUi.search.select();
             } else {
-                btnMaterials.classList.remove('is-active');
-                materialsPanel.style.display = 'none';
+                ui.btnScene.classList.remove('is-active');
+                sceneUi.panel.style.display = 'none';
             }
         };
 
-        materialsSearch.addEventListener('input', function () {
-            if (!isMaterialsOpen) return;
+        sceneUi.search.addEventListener('input', function () {
+            if (!isSceneOpen) return;
             renderSceneTree();
         });
 
-        materialsList.addEventListener('click', function (ev) {
+        sceneUi.list.addEventListener('click', function (ev) {
             var t = ev.target;
             var eye = null;
-            while (t && t !== materialsList) {
+            while (t && t !== sceneUi.list) {
                 if (t.classList && t.classList.contains('scene-eye')) {
                     eye = t;
                     break;
@@ -651,13 +651,13 @@ pc.script.createLoadingScreen(function (app) {
             }
 
             var el = ev.target;
-            while (el && el !== materialsList && !(el.classList && el.classList.contains('scene-row'))) el = el.parentElement;
-            if (!el || el === materialsList) return;
+            while (el && el !== sceneUi.list && !(el.classList && el.classList.contains('scene-row'))) el = el.parentElement;
+            if (!el || el === sceneUi.list) return;
 
             var path = el.dataset.path;
             var hasChildren = el.dataset.hasChildren === '1';
             var depth = parseInt(el.dataset.depth, 10);
-            var q = (materialsSearch.value || '').trim();
+            var q = (sceneUi.search.value || '').trim();
 
             if (!hasChildren && path) {
                 selectedPath = path;
@@ -672,19 +672,19 @@ pc.script.createLoadingScreen(function (app) {
             }
         });
 
-        var setActiveButton = function () {
+        var syncViewButtons = function () {
             if (viewMode === 'first') {
-                btnFirst.classList.add('is-active');
-                btnThird.classList.remove('is-active');
-                btnFixed.classList.remove('is-active');
+                ui.btnFirst.classList.add('is-active');
+                ui.btnThird.classList.remove('is-active');
+                ui.btnFixed.classList.remove('is-active');
             } else if (viewMode === 'fixed') {
-                btnFixed.classList.add('is-active');
-                btnThird.classList.remove('is-active');
-                btnFirst.classList.remove('is-active');
+                ui.btnFixed.classList.add('is-active');
+                ui.btnThird.classList.remove('is-active');
+                ui.btnFirst.classList.remove('is-active');
             } else {
-                btnThird.classList.add('is-active');
-                btnFirst.classList.remove('is-active');
-                btnFixed.classList.remove('is-active');
+                ui.btnThird.classList.add('is-active');
+                ui.btnFirst.classList.remove('is-active');
+                ui.btnFixed.classList.remove('is-active');
             }
         };
 
@@ -694,18 +694,18 @@ pc.script.createLoadingScreen(function (app) {
             }
         };
 
-        var onUpdate = function () {
-            if (viewMode !== 'fixed' && viewMode !== 'first') return;
-
+        var ensureCameraAndPlayer = function () {
             if (!cameraEntity) {
                 cameraEntity = app.root.findByName('Camera');
                 orbitScript = cameraEntity && cameraEntity.script && cameraEntity.script.cameraOrbitZoom ? cameraEntity.script.cameraOrbitZoom : null;
                 if (orbitScript) orbitScript.enabled = false;
             }
             if (!playerEntity) playerEntity = app.root.findByName('player');
-            if (!cameraEntity || !playerEntity) return;
+            if (!cameraEntity || !playerEntity) return false;
+            return true;
+        };
 
-            var p = playerEntity.getPosition();
+        var getFacingForwardXZ = function () {
             var robotPathMove = playerEntity.script && playerEntity.script.robotPathMove ? playerEntity.script.robotPathMove : null;
             var facingEntity = robotPathMove && robotPathMove.animEntity ? robotPathMove.animEntity : playerEntity;
 
@@ -722,33 +722,35 @@ pc.script.createLoadingScreen(function (app) {
                 tmpForward.set(fallbackForward.x, 0, fallbackForward.z);
             }
             tmpForward.normalize();
+            return facingEntity;
+        };
 
-            if (viewMode === 'fixed') {
-                tmpRight.cross(pc.Vec3.UP, tmpForward).normalize();
+        var updateFixedCamera = function (p) {
+            tmpRight.cross(pc.Vec3.UP, tmpForward).normalize();
 
-                var followBack = 4.75;
-                var followUp = 2.4;
-                var followRight = 0.55;
-                var lookAhead = 38.0;
-                var lookUp = 3.2;
+            var followBack = 4.75;
+            var followUp = 2.4;
+            var followRight = 0.55;
+            var lookAhead = 38.0;
+            var lookUp = 3.2;
 
-                tmpCamPos.set(
-                    p.x - tmpForward.x * followBack + tmpRight.x * followRight,
-                    p.y + followUp,
-                    p.z - tmpForward.z * followBack + tmpRight.z * followRight
-                );
+            tmpCamPos.set(
+                p.x - tmpForward.x * followBack + tmpRight.x * followRight,
+                p.y + followUp,
+                p.z - tmpForward.z * followBack + tmpRight.z * followRight
+            );
 
-                tmpLookPos.set(
-                    p.x + tmpForward.x * lookAhead,
-                    p.y + lookUp,
-                    p.z + tmpForward.z * lookAhead
-                );
+            tmpLookPos.set(
+                p.x + tmpForward.x * lookAhead,
+                p.y + lookUp,
+                p.z + tmpForward.z * lookAhead
+            );
 
-                cameraEntity.setPosition(tmpCamPos);
-                cameraEntity.lookAt(tmpLookPos);
-                return;
-            }
+            cameraEntity.setPosition(tmpCamPos);
+            cameraEntity.lookAt(tmpLookPos);
+        };
 
+        var updateEyeCamera = function (p, facingEntity) {
             if (!eyeMount) eyeMount = findEyeMount(facingEntity) || findEyeMount(playerEntity);
             if (eyeMount) {
                 tmpEyePos.copy(eyeMount.getPosition());
@@ -767,6 +769,21 @@ pc.script.createLoadingScreen(function (app) {
             cameraEntity.lookAt(tmpLookPos);
         };
 
+        var onUpdate = function () {
+            if (viewMode !== 'fixed' && viewMode !== 'first') return;
+            if (!ensureCameraAndPlayer()) return;
+
+            var p = playerEntity.getPosition();
+            var facingEntity = getFacingForwardXZ();
+
+            if (viewMode === 'fixed') {
+                updateFixedCamera(p);
+                return;
+            }
+
+            updateEyeCamera(p, facingEntity);
+        };
+
         var setViewMode = function (mode) {
             if (mode === viewMode) return;
             viewMode = mode;
@@ -774,7 +791,7 @@ pc.script.createLoadingScreen(function (app) {
             if (viewMode !== 'first') exitPointerLock();
             if (orbitScript) orbitScript.enabled = (viewMode === 'third');
 
-            setActiveButton();
+            syncViewButtons();
         };
 
         var swallow = function (ev) {
@@ -782,35 +799,32 @@ pc.script.createLoadingScreen(function (app) {
             ev.stopPropagation();
         };
 
-        btnThird.addEventListener('pointerdown', swallow, { passive: false });
-        btnFixed.addEventListener('pointerdown', swallow, { passive: false });
-        btnFirst.addEventListener('pointerdown', swallow, { passive: false });
-        btnMaterials.addEventListener('pointerdown', swallow, { passive: false });
-        btnHideTv.addEventListener('pointerdown', swallow, { passive: false });
-        btnHideFence.addEventListener('pointerdown', swallow, { passive: false });
-        btnHideFloor.addEventListener('pointerdown', swallow, { passive: false });
+        var hookButton = function (btn, onClick) {
+            btn.addEventListener('pointerdown', swallow, { passive: false });
+            btn.addEventListener('click', onClick);
+        };
 
-        btnThird.addEventListener('click', function () { setViewMode('third'); });
-        btnFixed.addEventListener('click', function () { setViewMode('fixed'); });
-        btnFirst.addEventListener('click', function () { setViewMode('first'); });
-        btnMaterials.addEventListener('click', function () { setMaterialsOpen(!isMaterialsOpen); });
-        btnHideTv.addEventListener('click', function () {
+        hookButton(ui.btnThird, function () { setViewMode('third'); });
+        hookButton(ui.btnFixed, function () { setViewMode('fixed'); });
+        hookButton(ui.btnFirst, function () { setViewMode('first'); });
+        hookButton(ui.btnScene, function () { setSceneOpen(!isSceneOpen); });
+        hookButton(ui.btnHideTv, function () {
             var tvNames = [
                 'Mesh_368', 'Mesh_369', 'Mesh_370', 'Mesh_371', 'Mesh_372', 'Mesh_373', 'Mesh_374', 'Mesh_375', 'Mesh_376',
                 'Mesh_377', 'Mesh_378', 'Mesh_379', 'Mesh_380', 'Mesh_381', '屏幕'
             ];
             isTvHidden = !isTvHidden;
             if (isTvHidden) {
-                btnHideTv.classList.add('is-active');
+                ui.btnHideTv.classList.add('is-active');
                 tvTargets = collectTargetsByNames(tvNames);
                 hideTargets(tvTargets);
             } else {
-                btnHideTv.classList.remove('is-active');
+                ui.btnHideTv.classList.remove('is-active');
                 showTargets(tvTargets);
                 tvTargets = null;
             }
         });
-        btnHideFence.addEventListener('click', function () {
+        hookButton(ui.btnHideFence, function () {
             var fenceNames = [
                 'Mesh_106', 'Mesh_77', 'Mesh_55', 'Mesh_63', 'Mesh_155', 'Mesh_60', 'Mesh_110', 'Mesh_145', 'Mesh_156', 'Mesh_153', 'Mesh_154',
                 'Mesh_75', 'Mesh_80', 'Mesh_85', 'Mesh_90', 'Mesh_96', 'Mesh_101', 'Mesh_103', 'Mesh_113',
@@ -821,25 +835,25 @@ pc.script.createLoadingScreen(function (app) {
             ];
             isFenceHidden = !isFenceHidden;
             if (isFenceHidden) {
-                btnHideFence.classList.add('is-active');
+                ui.btnHideFence.classList.add('is-active');
                 fenceTargets = collectTargetsByNames(fenceNames);
                 hideTargets(fenceTargets);
             } else {
-                btnHideFence.classList.remove('is-active');
+                ui.btnHideFence.classList.remove('is-active');
                 showTargets(fenceTargets);
                 fenceTargets = null;
             }
         });
 
-        btnHideFloor.addEventListener('click', function () {
+        hookButton(ui.btnHideFloor, function () {
             var floorNames = ['Mesh_383'];
             isFloorHidden = !isFloorHidden;
             if (isFloorHidden) {
-                btnHideFloor.classList.add('is-active');
+                ui.btnHideFloor.classList.add('is-active');
                 floorTargets = collectTargetsByNames(floorNames);
                 hideTargets(floorTargets);
             } else {
-                btnHideFloor.classList.remove('is-active');
+                ui.btnHideFloor.classList.remove('is-active');
                 showTargets(floorTargets);
                 floorTargets = null;
             }
@@ -1056,6 +1070,40 @@ pc.script.createLoadingScreen(function (app) {
             '    cursor: pointer;',
             '    padding: 0;',
             '    outline: none;',
+            '    position: relative;',
+            '}',
+            '',
+            '.bottom-toolbar .toolbar-btn:hover::after {',
+            '    content: attr(aria-label);',
+            '    position: absolute;',
+            '    left: 50%;',
+            '    bottom: 52px;',
+            '    transform: translateX(-50%);',
+            '    padding: 6px 8px;',
+            '    border-radius: 10px;',
+            '    background: rgba(16, 18, 20, 0.92);',
+            '    border: 1px solid rgba(255, 255, 255, 0.14);',
+            '    color: rgba(255, 255, 255, 0.92);',
+            '    font-size: 12px;',
+            '    line-height: 1;',
+            '    white-space: nowrap;',
+            '    pointer-events: none;',
+            '    z-index: 10003;',
+            '}',
+            '',
+            '.bottom-toolbar .toolbar-btn:hover::before {',
+            '    content: "";',
+            '    position: absolute;',
+            '    left: 50%;',
+            '    bottom: 44px;',
+            '    transform: translateX(-50%);',
+            '    width: 0;',
+            '    height: 0;',
+            '    border-style: solid;',
+            '    border-width: 6px 6px 0 6px;',
+            '    border-color: rgba(16, 18, 20, 0.92) transparent transparent transparent;',
+            '    pointer-events: none;',
+            '    z-index: 10003;',
             '}',
             '',
             '.bottom-toolbar .toolbar-btn svg {',
