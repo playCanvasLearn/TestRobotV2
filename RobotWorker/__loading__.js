@@ -83,7 +83,7 @@ pc.script.createLoadingScreen(function (app) {
         svg.setAttribute('viewBox', '0 0 24 24');
         svg.setAttribute('aria-hidden', 'true');
 
-        if (type === 'third') {
+        if (type === 'fixed') {
             var p1 = document.createElementNS(ns, 'path');
             p1.setAttribute('d', 'M12 5a7 7 0 1 0 7 7');
             svg.appendChild(p1);
@@ -98,7 +98,7 @@ pc.script.createLoadingScreen(function (app) {
             return svg;
         }
 
-        if (type === 'fixed') {
+        if (type === 'third') {
             var rect = document.createElementNS(ns, 'rect');
             rect.setAttribute('x', '3');
             rect.setAttribute('y', '7');
@@ -217,8 +217,8 @@ pc.script.createLoadingScreen(function (app) {
             toolbar.setAttribute('role', 'toolbar');
             toolbar.setAttribute('aria-label', '工具栏');
 
-            var btnThird = createToolbarButton('固定视角', 'third', '', true);
-            var btnFixed = createToolbarButton('第三人称视角', 'fixed', '');
+            var btnThird = createToolbarButton('固定视角', 'fixed', '', true);
+            var btnFixed = createToolbarButton('第三人称视角', 'third', '');
             var btnFirst = createToolbarButton('第一人称视角', 'first', '');
 
             var btnScene = createToolbarButton('查看场景物品', 'materials', 'toolbar-btn-materials');
@@ -291,7 +291,7 @@ pc.script.createLoadingScreen(function (app) {
         var playerEntity = app.root.findByName('player');
         var orbitScript = cameraEntity && cameraEntity.script && cameraEntity.script.cameraOrbitZoom ? cameraEntity.script.cameraOrbitZoom : null;
 
-        var viewMode = 'third';
+        var viewMode = 'fixed';
         var isSceneOpen = false;
         var isTvHidden = false;
         var isFenceHidden = false;
@@ -677,7 +677,7 @@ pc.script.createLoadingScreen(function (app) {
                 ui.btnFirst.classList.add('is-active');
                 ui.btnThird.classList.remove('is-active');
                 ui.btnFixed.classList.remove('is-active');
-            } else if (viewMode === 'fixed') {
+            } else if (viewMode === 'third') {
                 ui.btnFixed.classList.add('is-active');
                 ui.btnThird.classList.remove('is-active');
                 ui.btnFirst.classList.remove('is-active');
@@ -725,14 +725,14 @@ pc.script.createLoadingScreen(function (app) {
             return facingEntity;
         };
 
-        var updateFixedCamera = function (p) {
+        var updateThirdCamera = function (p) {
             tmpRight.cross(pc.Vec3.UP, tmpForward).normalize();
 
-            var followBack = 4.75;
-            var followUp = 2.4;
-            var followRight = 0.55;
-            var lookAhead = 38.0;
-            var lookUp = 3.2;
+            var followBack = 6.75;    // 相机离角色的后向距离（越大越远）
+            var followUp = 4.4;       // 相机高度（越大越高）
+            var followRight = 0.55;   // 相机向右的偏移（越大越靠右）
+            var lookAhead = 38.0;     // 视线朝前看的距离（越大越看向远处）
+            var lookUp = -3.2;         // 视线目标高度（越小越向下看，越大越仰视）
 
             tmpCamPos.set(
                 p.x - tmpForward.x * followBack + tmpRight.x * followRight,
@@ -770,14 +770,14 @@ pc.script.createLoadingScreen(function (app) {
         };
 
         var onUpdate = function () {
-            if (viewMode !== 'fixed' && viewMode !== 'first') return;
+            if (viewMode !== 'third' && viewMode !== 'first') return;
             if (!ensureCameraAndPlayer()) return;
 
             var p = playerEntity.getPosition();
             var facingEntity = getFacingForwardXZ();
 
-            if (viewMode === 'fixed') {
-                updateFixedCamera(p);
+            if (viewMode === 'third') {
+                updateThirdCamera(p);
                 return;
             }
 
@@ -789,7 +789,7 @@ pc.script.createLoadingScreen(function (app) {
             viewMode = mode;
 
             if (viewMode !== 'first') exitPointerLock();
-            if (orbitScript) orbitScript.enabled = (viewMode === 'third');
+            if (orbitScript) orbitScript.enabled = (viewMode === 'fixed');
 
             syncViewButtons();
         };
@@ -804,16 +804,15 @@ pc.script.createLoadingScreen(function (app) {
             btn.addEventListener('click', onClick);
         };
 
-        hookButton(ui.btnThird, function () { setViewMode('third'); });
-        hookButton(ui.btnFixed, function () { setViewMode('fixed'); });
-        hookButton(ui.btnFirst, function () { setViewMode('first'); });
-        hookButton(ui.btnScene, function () { setSceneOpen(!isSceneOpen); });
-        hookButton(ui.btnHideTv, function () {
-            var tvNames = [
-                'Mesh_368', 'Mesh_369', 'Mesh_370', 'Mesh_371', 'Mesh_372', 'Mesh_373', 'Mesh_374', 'Mesh_375', 'Mesh_376',
-                'Mesh_377', 'Mesh_378', 'Mesh_379', 'Mesh_380', 'Mesh_381', '屏幕'
-            ];
-            isTvHidden = !isTvHidden;
+        var tvNames = [
+            'Mesh_368', 'Mesh_369', 'Mesh_370', 'Mesh_371', 'Mesh_372', 'Mesh_373', 'Mesh_374', 'Mesh_375', 'Mesh_376',
+            'Mesh_377', 'Mesh_378', 'Mesh_379', 'Mesh_380', 'Mesh_381', '屏幕'
+        ];
+        var tvDefaultHiddenInFixedApplied = false;
+
+        var applyTvHidden = function (hidden) {
+            if (hidden === isTvHidden) return;
+            isTvHidden = hidden;
             if (isTvHidden) {
                 ui.btnHideTv.classList.add('is-active');
                 tvTargets = collectTargetsByNames(tvNames);
@@ -823,6 +822,20 @@ pc.script.createLoadingScreen(function (app) {
                 showTargets(tvTargets);
                 tvTargets = null;
             }
+        };
+
+        hookButton(ui.btnThird, function () { setViewMode('fixed'); });
+        hookButton(ui.btnFixed, function () {
+            setViewMode('third');
+            if (!tvDefaultHiddenInFixedApplied) {
+                tvDefaultHiddenInFixedApplied = true;
+                applyTvHidden(true);
+            }
+        });
+        hookButton(ui.btnFirst, function () { setViewMode('first'); });
+        hookButton(ui.btnScene, function () { setSceneOpen(!isSceneOpen); });
+        hookButton(ui.btnHideTv, function () {
+            applyTvHidden(!isTvHidden);
         });
         hookButton(ui.btnHideFence, function () {
             var fenceNames = [
@@ -858,6 +871,11 @@ pc.script.createLoadingScreen(function (app) {
                 floorTargets = null;
             }
         });
+
+        if (viewMode === 'third' && !tvDefaultHiddenInFixedApplied) {
+            tvDefaultHiddenInFixedApplied = true;
+            applyTvHidden(true);
+        }
 
         app.on('update', onUpdate);
 
