@@ -38909,6 +38909,18 @@ RobotPathMove.attributes.add('arriveDistance', { type: 'number', default: 0.15 }
 // 最大移动速度限制（防止物理速度失控）
 RobotPathMove.attributes.add('moveSpeed', { type: 'number', default: 0.8});
 
+// 起步加速度
+RobotPathMove.attributes.add('acceleration', { type: 'number', default: 2.2 });
+
+// 刹车减速度
+RobotPathMove.attributes.add('deceleration', { type: 'number', default: 3.2 });
+
+// 进入目标点前开始减速的距离
+RobotPathMove.attributes.add('slowDownDistance', { type: 'number', default: 0.8 });
+
+// 普通拐点的保底速度比例，避免每个路径点都像急停再起步
+RobotPathMove.attributes.add('cornerSpeedRatio', { type: 'number', default: 0.35 });
+
 // pause 节点停留时间（秒）
 RobotPathMove.attributes.add('pauseTime', { type: 'number', default: 2 });
 
@@ -39013,6 +39025,15 @@ RobotPathMove.prototype.initialize = function () {
 
     this._baseEuler = initEuler; // 初始姿态
     this._angle = initEuler.y;   // 当前 Y 轴角度（用于插值）
+    this._rotateSharpness = 10;
+    this._currentSpeed = 0;
+
+    if (this.entity.rigidbody) {
+        this.entity.removeComponent('rigidbody');
+    }
+    if (this.entity.collision) {
+        this.entity.removeComponent('collision');
+    }
 
     // 监听鼠标点击（用于调试坐标）
     this.app.mouse.on(pc.EVENT_MOUSEDOWN, this.onMouseDown, this);
@@ -39123,9 +39144,6 @@ RobotPathMove.prototype.update = function (dt) {
         this._chartTexture.upload();
     }
 
-    // 必须有刚体才能移动
-    if (!this.entity.rigidbody) return;
-
     // 路径走完直接结束
     if (this._index >= this.path.length) {
         this._index = 0;
@@ -39135,6 +39153,22 @@ RobotPathMove.prototype.update = function (dt) {
     var target = node.position;
 
     var pos = this.entity.getLocalPosition();
+
+    while (node && node.turn === '' && this._index + 1 < this.path.length) {
+        var samePoint = Math.abs(target.x - pos.x) <= this.arriveDistance &&
+            Math.abs(target.z - pos.z) <= this.arriveDistance;
+        var nextNode = this.path[this._index + 1];
+        var sameAsNext = nextNode &&
+            Math.abs(target.x - nextNode.position.x) < 1e-4 &&
+            Math.abs(target.y - nextNode.position.y) < 1e-4 &&
+            Math.abs(target.z - nextNode.position.z) < 1e-4;
+
+        if (!samePoint || !sameAsNext) break;
+
+        this._index++;
+        node = this.path[this._index];
+        target = node.position;
+    }
 
     /* === 标签文字切换 === */
     if (node.showMessage !== this._lastMessage) {
@@ -39153,6 +39187,7 @@ RobotPathMove.prototype.update = function (dt) {
     }
     // ===== pause 节点：walk → idle（纯停留）=====
     if (node.turn === 'pause') {
+        this._currentSpeed = 0;
         // 第一次进入 pause
         if (this._pauseTimer === 0) {
             this.setPlayerStatus(2); // walk → idle
@@ -39169,6 +39204,7 @@ RobotPathMove.prototype.update = function (dt) {
     }
     // ===== take 节点：idle → take =====
     if (node.turn === 'take') {
+        this._currentSpeed = 0;
         // 第一次进入 take
         if (this._pauseTimer === 0) {
             this.setPlayerStatus(3); // idle → take
@@ -39185,12 +39221,14 @@ RobotPathMove.prototype.update = function (dt) {
     }
     // ===== openDoor 节点：触发开门 =====
     if (node.turn === 'openDoor') {
+        this._currentSpeed = 0;
         this._doorDir = 1; // 开始开门
         this._index++;     // 立即进入下一节点，不阻塞
         return;
     }
     // ===== closeDoor 节点：触发关门 =====
     if (node.turn === 'closeDoor') {
+        this._currentSpeed = 0;
         this._doorDir = -1; // 开始关门
         this._index++;      // 立即进入下一节点，不阻塞
         return;
@@ -39216,6 +39254,10 @@ RobotPathMove.prototype.update = function (dt) {
 
     /* ===== 到点 ===== */
     if (dist <= this.arriveDistance) {
+        var nextNodeAfterArrive = this.path[(this._index + 1) % this.path.length];
+        if (!nextNodeAfterArrive || nextNodeAfterArrive.turn !== '') {
+            this._currentSpeed = 0;
+        }
 
         // 精确贴点
         this.entity.setLocalPosition(
@@ -39233,7 +39275,27 @@ RobotPathMove.prototype.update = function (dt) {
     this.setPlayerStatus(1);
     this._moveDir.normalize();
 
-    var step = this.moveSpeed * dt;
+    var nextNode = this.path[(this._index + 1) % this.path.length];
+    var needsFullStop = !nextNode || nextNode.turn !== '';
+    var slowDownDistance = Math.max(this.slowDownDistance, this.arriveDistance);
+    var slowFactor = pc.math.clamp(dist / slowDownDistance, 0, 1);
+    var minCornerSpeed = needsFullStop ? 0 : this.moveSpeed * this.cornerSpeedRatio;
+    var desiredSpeed = this.moveSpeed;
+
+    if (dist < slowDownDistance) {
+        desiredSpeed = Math.max(minCornerSpeed, this.moveSpeed * slowFactor);
+    }
+
+    var speedDelta = desiredSpeed - this._currentSpeed;
+    var speedStep = (speedDelta >= 0 ? this.acceleration : this.deceleration) * dt;
+
+    if (Math.abs(speedDelta) <= speedStep) {
+        this._currentSpeed = desiredSpeed;
+    } else {
+        this._currentSpeed += speedStep * (speedDelta > 0 ? 1 : -1);
+    }
+
+    var step = this._currentSpeed * dt;
 
     // 防止跨过目标
     if (step > dist) step = dist;
@@ -39297,7 +39359,8 @@ RobotPathMove.prototype.updateLookAt = function (node, dt) {
     // 使用 lookDir 计算目标角度
     this._targetAngle = Math.atan2(this._lookDir.x, this._lookDir.z) * pc.math.RAD_TO_DEG;
 
-    this._angle = pc.math.lerpAngle(this._angle, this._targetAngle, 0.15);
+    var rotateLerp = 1 - Math.exp(-this._rotateSharpness * dt);
+    this._angle = pc.math.lerpAngle(this._angle, this._targetAngle, rotateLerp);
 
     var baseX = this._baseEuler.x;
     var baseZ = this._baseEuler.z;
