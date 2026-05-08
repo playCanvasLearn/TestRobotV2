@@ -342,6 +342,15 @@ pc.script.createLoadingScreen(function (app) {
         var floorTargets = null;
         var hiddenEntities = Object.create(null);
         var hiddenMeshInstances = Object.create(null);
+        var sceneListHiddenNames = {
+            SceneRoot: true,
+            Light: true,
+            MachineEntity: true,
+            cabinetEntity1: true,
+            cabinetEntity2: true,
+            DetectionEntity: true,
+            GroundEntity: true
+        };
 
         var findByNameLower = function (root, nameLower) {
             if (!root) return null;
@@ -520,13 +529,21 @@ pc.script.createLoadingScreen(function (app) {
             highlighted = { items: items };
         };
 
-        var shouldShowNode = function (node, q) {
+        var isSceneListHiddenNode = function (node) {
+            if (!node) return false;
+            return !!sceneListHiddenNames[node.name || ''];
+        };
+
+        var shouldShowNode = function (node, q, path) {
+            if (!node) return false;
+            if (isSceneListHiddenNode(node) && path !== '0') return false;
+
             if (!q) return true;
             var name = (node.name || '').toLowerCase();
             if (name.indexOf(q) !== -1) return true;
             var children = node.children;
             for (var i = 0; i < children.length; i++) {
-                if (shouldShowNode(children[i], q)) return true;
+                if (shouldShowNode(children[i], q, path + '.' + i)) return true;
             }
             return false;
         };
@@ -548,14 +565,23 @@ pc.script.createLoadingScreen(function (app) {
             var any = false;
 
             var renderNode = function (node, depth, path) {
-                if (!shouldShowNode(node, q)) return;
+                if (!shouldShowNode(node, q, path)) return;
+
+                var hiddenByName = isSceneListHiddenNode(node);
+                var children = node.children || [];
+
+                if (hiddenByName && path === '0') {
+                    for (var rootChildIdx = 0; rootChildIdx < children.length; rootChildIdx++) {
+                        renderNode(children[rootChildIdx], depth, path + '.' + rootChildIdx);
+                    }
+                    return;
+                }
 
                 any = true;
-                var children = node.children || [];
                 var hasChildren = children.length > 0;
 
                 var matched = !q || ((node.name || '').toLowerCase().indexOf(q) !== -1);
-                var expanded = depth === 0 || (!!treeExpanded[path]) || (!!q && hasChildren && shouldShowNode(node, q));
+                var expanded = path === '0' || (!!treeExpanded[path]) || (!!q && hasChildren && shouldShowNode(node, q, path));
 
                 var row = document.createElement('div');
                 row.className = 'scene-row' + (selectedPath === path ? ' is-selected' : '');
@@ -574,7 +600,7 @@ pc.script.createLoadingScreen(function (app) {
                 nameEl.innerText = node.name || '(未命名)';
                 row.appendChild(nameEl);
 
-                if (depth > 0 && hasChildren) {
+                if (path !== '0' && hasChildren) {
                     var eyeBtn = document.createElement('button');
                     eyeBtn.type = 'button';
                     eyeBtn.className = 'scene-eye';
@@ -657,7 +683,6 @@ pc.script.createLoadingScreen(function (app) {
 
             var path = el.dataset.path;
             var hasChildren = el.dataset.hasChildren === '1';
-            var depth = parseInt(el.dataset.depth, 10);
             var q = (sceneUi.search.value || '').trim();
 
             if (!hasChildren && path) {
@@ -667,7 +692,7 @@ pc.script.createLoadingScreen(function (app) {
                 return;
             }
 
-            if (!q && hasChildren && depth > 0 && path) {
+            if (!q && hasChildren && path && path !== '0') {
                 treeExpanded[path] = !treeExpanded[path];
                 renderSceneTree();
             }
