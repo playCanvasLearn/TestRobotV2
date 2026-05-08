@@ -34,7 +34,7 @@ path = [
     { showMessage: '放料中', turn: 'pause', position: { x: -1.2, y: 0, z: 4.5 }, lookAt: { x: -1.3, y: 0, z: 4.5 } },
     { showMessage: '放料中', turn: 'take', position: { x: -1.2, y: 0, z: 4.5 }, lookAt: { x: -1.3, y: 0, z: 4.5 } },
     { showMessage: '放料中', turn: '', position: { x: -1.2, y: 0, z: 4.5 }, lookAt: { x: -1.3, y: 0, z: 4.5 } },
-    { showMessage: '去拿料', turn: '', position: { x: -1.3, y: 0, z: 4.5 }, lookAt: { x: -1.3, y: 0, z: 2.7 } },
-    { showMessage: '去拿料', turn: '', position: { x: -1.3, y: 0, z: 2.7 }, lookAt: { x: 1.8, y: 0, z: 2.5 } },
-    { showMessage: '去拿料', turn: '', position: { x: 1.5, y: 0, z: 0 }, lookAt: { x: 1.5, y: 0, z: 1.3 } },/**/
+    { showMessage: '去拿料', turn: '', position: { x: -1, y: 0, z: 2.7 }, lookAt: { x: -1, y: 0, z: 2.7 } },
+    { showMessage: '去拿料', turn: '', position: { x: 1.5, y: 0, z: 2.7 }, lookAt: { x: 1.5, y: 0, z: 2.7 } },
+    { showMessage: '去拿料', turn: '', position: { x: 1.5, y: 0, z: 4.5 }, lookAt: { x: 1.5, y: 0, z: 4.5 } },
 ];
