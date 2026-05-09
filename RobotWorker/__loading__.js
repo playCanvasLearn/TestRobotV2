@@ -292,6 +292,7 @@ pc.script.createLoadingScreen(function (app) {
         var orbitScript = cameraEntity && cameraEntity.script && cameraEntity.script.cameraOrbitZoom ? cameraEntity.script.cameraOrbitZoom : null;
 
         var viewMode = 'fixed';
+        window.__robotViewMode = viewMode;
         var isSceneOpen = false;
         var isTvHidden = false;
         var isFenceHidden = false;
@@ -826,6 +827,7 @@ pc.script.createLoadingScreen(function (app) {
         var setViewMode = function (mode) {
             if (mode === viewMode) return;
             viewMode = mode;
+            window.__robotViewMode = viewMode;
 
             if (viewMode !== 'first') exitPointerLock();
             if (orbitScript) orbitScript.enabled = (viewMode === 'fixed');

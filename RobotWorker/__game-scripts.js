@@ -39008,6 +39008,9 @@ RobotPathMove.prototype.initialize = function () {
     this._angle = initEuler.y;   // 当前 Y 轴角度（用于插值）
     this._rotateSharpness = 10;
     this._currentSpeed = 0;
+    this._labelBaseEuler = new pc.Vec3();
+    this._labelWorldPos = new pc.Vec3();
+    this._labelCameraPos = new pc.Vec3();
 
     if (this.entity.rigidbody) {
         this.entity.removeComponent('rigidbody');
@@ -39086,6 +39089,7 @@ RobotPathMove.prototype.initialize = function () {
     this._camera = this.app.root.findByName('Camera');
 
     if (this.labelPlane) {
+        this._labelBaseEuler.copy(this.labelPlane.getLocalEulerAngles());
         this._initLabelCanvas();
         this._updateLabel(this.path[0].showMessage);
     }
@@ -39170,8 +39174,7 @@ RobotPathMove.prototype.update = function (dt) {
 
     /* === Billboard === */
     if (this.labelPlane && this._camera) {
-        //this.labelPlane.lookAt(this._camera.getLocalPosition());
-        //this.labelPlane.setLocalPosition(0, this.labelOffsetY, 0);
+        this._updateLabelFacingForThirdPerson();
     }
 
     if (this._targetMarker) {
@@ -39489,6 +39492,26 @@ RobotPathMove.prototype._updateLabel = function (text) {
     ctx.fillText(text, w / 2, h / 2);
 
     this._labelTexture.upload();
+};
+
+RobotPathMove.prototype._updateLabelFacingForThirdPerson = function () {
+    if (!this.labelPlane) return;
+
+    if (window.__robotViewMode !== 'third' || !this._camera) {
+        this.labelPlane.setLocalEulerAngles(this._labelBaseEuler);
+        return;
+    }
+
+    this._labelWorldPos.copy(this.labelPlane.getPosition());
+    this._labelCameraPos.copy(this._camera.getPosition());
+    this._labelCameraPos.y = this._labelWorldPos.y;
+
+    var dx = this._labelCameraPos.x - this._labelWorldPos.x;
+    var dz = this._labelCameraPos.z - this._labelWorldPos.z;
+    if (Math.abs(dx) <= 1e-4 && Math.abs(dz) <= 1e-4) return;
+
+    var yaw = Math.atan2(dx, dz) * pc.math.RAD_TO_DEG;
+    this.labelPlane.setLocalEulerAngles(90, yaw, 0);
 };
 
 /* 背景颜色策略 */
