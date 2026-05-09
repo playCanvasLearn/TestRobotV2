@@ -38921,6 +38921,9 @@ RobotPathMove.attributes.add('slowDownDistance', { type: 'number', default: 0.8 
 // 普通拐点的保底速度比例，避免每个路径点都像急停再起步
 RobotPathMove.attributes.add('cornerSpeedRatio', { type: 'number', default: 0.35 });
 
+// 最大转身速度（度/秒），限制急转时的生硬感
+RobotPathMove.attributes.add('turnSpeed', { type: 'number', default: 240 });
+
 // pause 节点停留时间（秒）
 RobotPathMove.attributes.add('pauseTime', { type: 'number', default: 2 });
 
@@ -39316,16 +39319,7 @@ RobotPathMove.prototype.updateMoveRotation = function (dt) {
     this._targetAngle =
         Math.atan2(dir.x, dir.z) * pc.math.RAD_TO_DEG;
 
-    // 角度插值（平滑转身，防抖）
-    this._angle = pc.math.lerpAngle(this._angle, this._targetAngle, 0.15);
-
-    // 只控制 Y 轴，X/Z 保持初始姿态
-    var baseX = this._baseEuler.x;
-    var baseZ = this._baseEuler.z;
-
-    // 优先控制 animEntity（模型）
-    (this.animEntity || this.entity)
-        .setEulerAngles(baseX, this._angle, baseZ);
+    this._applySmoothTurn(dt);
 };
 
 /* =========================================================
@@ -39350,8 +39344,23 @@ RobotPathMove.prototype.updateLookAt = function (node, dt) {
     // 使用 lookDir 计算目标角度
     this._targetAngle = Math.atan2(this._lookDir.x, this._lookDir.z) * pc.math.RAD_TO_DEG;
 
+    this._applySmoothTurn(dt);
+};
+
+RobotPathMove.prototype._applySmoothTurn = function (dt) {
+    var delta = this._targetAngle - this._angle;
+    while (delta > 180) delta -= 360;
+    while (delta < -180) delta += 360;
+
     var rotateLerp = 1 - Math.exp(-this._rotateSharpness * dt);
-    this._angle = pc.math.lerpAngle(this._angle, this._targetAngle, rotateLerp);
+    var lerpedAngle = this._angle + delta * rotateLerp;
+    var maxStep = this.turnSpeed * dt;
+    var limitedDelta = lerpedAngle - this._angle;
+
+    if (limitedDelta > maxStep) limitedDelta = maxStep;
+    if (limitedDelta < -maxStep) limitedDelta = -maxStep;
+
+    this._angle += limitedDelta;
 
     var baseX = this._baseEuler.x;
     var baseZ = this._baseEuler.z;
