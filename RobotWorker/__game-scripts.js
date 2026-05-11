@@ -39431,9 +39431,9 @@ RobotPathMove.prototype._initPickupSystem = function () {
     // 这一段只负责“初始化摆放位置”：
     // 基础点来自取料路径点，再叠加 pickupSpawnOffset。
     if (pickupNode && pickupNode.lookAt) {
-        this._pickupSpawnBasePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z);
+        this._pickupSpawnBasePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z-0.28);
     } else {
-        this._pickupSpawnBasePos.set(1.0, 0.18, 5.2);
+        this._pickupSpawnBasePos.set(1.0, 0.18, 4.92);
     }
 
     this._pickupSpawnPos.copy(this._pickupSpawnBasePos);
