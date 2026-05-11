@@ -39425,8 +39425,8 @@ RobotPathMove.prototype._initPickupSystem = function () {
     }
 
     // 默认给一个可见的手持偏移，避免物品埋进手掌里
-    this._pickupLocalPos.set(0.30, -0.015, 0.05);
-    this._pickupLocalEuler.set(-20, 8, 82);
+    this._pickupLocalPos.set(0.08, -0.03, 0.02);
+    this._pickupLocalEuler.set(0, 0, 90);
 
     this._grabSocket = this._ensureGrabSocket();
     this._pickupItem = this._ensurePickupCylinder();
