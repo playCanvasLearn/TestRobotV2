@@ -39019,6 +39019,9 @@ RobotPathMove.prototype.initialize = function () {
     this._heldItem = null;
     this._takeActionDone = !1;
     this._activeTakeNode = -1;
+    this._pickupSpawnBasePos = new pc.Vec3();
+    this._pickupSpawnPos = new pc.Vec3();
+    this._pickupHandLocalPos = new pc.Vec3();
     this._pickupHomePos = new pc.Vec3();
     this._pickupDropPos = new pc.Vec3();
     this._pickupLocalPos = new pc.Vec3(0, 0, 0);
@@ -39241,7 +39244,12 @@ RobotPathMove.prototype.update = function (dt) {
         this._pauseTimer += dt;
         this.updateLookAt(node, dt);
 
-        if (!this._takeActionDone && this._activeTakeNode === this._index && this._pauseTimer >= 0.35) {
+        // 在 take 动作即将完成前再移动物品，避免一进入 take 就直接吸到手上。
+        // 数值表示“距离 take 结束还剩多少秒时”触发。
+        var takeMoveLeadTime = 0.2;
+        var takeActionTriggerTime = Math.max(0.05, this.pauseTime - takeMoveLeadTime);
+
+        if (!this._takeActionDone && this._activeTakeNode === this._index && this._pauseTimer >= takeActionTriggerTime) {
             this._handleTakeAction(node);
             this._takeActionDone = !0;
         }
@@ -39402,6 +39410,13 @@ RobotPathMove.prototype._applySmoothTurn = function (dt) {
 RobotPathMove.prototype._initPickupSystem = function () {
     var pickupNode = null;
     var dropNode = null;
+    // 圆柱体在场景中“待抓取时”的初始化摆放偏移（世界坐标偏移）
+    // 只影响物品在工位上的初始位置，不影响挂到手上后的相对位置。
+    var pickupSpawnOffset = new pc.Vec3(0, 0, 0);
+    // 圆柱体 attach 到手部挂点后的局部偏移（手部局部坐标）
+    // 只影响物品抓在手上的位置，不影响场景里的初始摆放位置。
+    var pickupHandOffset = new pc.Vec3(0.08, -0.03, 0.02);
+
     for (var i = 0; i < this.path.length; i++) {
         var node = this.path[i];
         if (!pickupNode && node.turn === 'take' && node.showMessage === '拿料中') {
@@ -39412,11 +39427,17 @@ RobotPathMove.prototype._initPickupSystem = function () {
         }
     }
 
+    // 这一段只负责“初始化摆放位置”：
+    // 基础点来自取料路径点，再叠加 pickupSpawnOffset。
     if (pickupNode && pickupNode.lookAt) {
-        this._pickupHomePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z-0.5);
+        this._pickupSpawnBasePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z);
     } else {
-        this._pickupHomePos.set(1.0, 0.18, 4.7);
+        this._pickupSpawnBasePos.set(1.0, 0.18, 5.2);
     }
+
+    this._pickupSpawnPos.copy(this._pickupSpawnBasePos);
+    this._pickupSpawnPos.add(pickupSpawnOffset);
+    this._pickupHomePos.copy(this._pickupSpawnPos);
 
     if (dropNode && dropNode.position) {
         this._pickupDropPos.set(dropNode.position.x, 0.18, dropNode.position.z);
@@ -39424,8 +39445,10 @@ RobotPathMove.prototype._initPickupSystem = function () {
         this._pickupDropPos.set(-1.2, 0.18, 4.5);
     }
 
-    // 默认给一个可见的手持偏移，避免物品埋进手掌里
-    this._pickupLocalPos.set(0.08, -0.03, 0.02);
+    // 手上抓取位置只由 pickupHandOffset 控制：
+    // 这里只影响 attach 到手上后的局部偏移，不参与初始化摆放。
+    this._pickupHandLocalPos.copy(pickupHandOffset);
+    this._pickupLocalPos.copy(this._pickupHandLocalPos);
     this._pickupLocalEuler.set(0, 0, 90);
 
     this._grabSocket = this._ensureGrabSocket();
@@ -39539,7 +39562,7 @@ RobotPathMove.prototype._ensurePickupCylinder = function () {
     if (!item) {
         item = new pc.Entity('AutoPickupCylinder');
         item.addComponent('model', {type: 'cylinder'});
-        item.setLocalScale(0.09, 0.14, 0.09);
+        item.setLocalScale(0.12, 0.18, 0.12);
 
         var mat = new pc.StandardMaterial();
         mat.diffuse.set(0.65, 0.65, 0.65);
