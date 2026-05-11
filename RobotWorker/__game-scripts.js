@@ -39429,6 +39429,10 @@ RobotPathMove.prototype._initPickupSystem = function () {
     this._pickupLocalEuler.set(0, 0, 90);
 
     this._grabSocket = this._ensureGrabSocket();
+    this._updateGrabSocketPose();
+    if (this._grabSocket) {
+        this._pickupHomePos.y = this._grabSocket.getPosition().y + this._pickupLocalPos.y;
+    }
     this._pickupItem = this._ensurePickupCylinder();
 };
 
@@ -39535,7 +39539,7 @@ RobotPathMove.prototype._ensurePickupCylinder = function () {
     if (!item) {
         item = new pc.Entity('AutoPickupCylinder');
         item.addComponent('model', {type: 'cylinder'});
-        item.setLocalScale(0.12, 0.18, 0.12);
+        item.setLocalScale(0.09, 0.14, 0.09);
 
         var mat = new pc.StandardMaterial();
         mat.diffuse.set(0.65, 0.65, 0.65);
