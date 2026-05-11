@@ -39413,9 +39413,9 @@ RobotPathMove.prototype._initPickupSystem = function () {
     }
 
     if (pickupNode && pickupNode.lookAt) {
-        this._pickupHomePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z);
+        this._pickupHomePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z-0.5);
     } else {
-        this._pickupHomePos.set(1.0, 0.18, 5.2);
+        this._pickupHomePos.set(1.0, 0.18, 4.7);
     }
 
     if (dropNode && dropNode.position) {
