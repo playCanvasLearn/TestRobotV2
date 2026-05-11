@@ -39014,6 +39014,19 @@ RobotPathMove.prototype.initialize = function () {
     this._labelBaseEuler = new pc.Vec3();
     this._labelWorldPos = new pc.Vec3();
     this._labelCameraPos = new pc.Vec3();
+    this._grabSocket = null;
+    this._pickupItem = null;
+    this._heldItem = null;
+    this._takeActionDone = !1;
+    this._activeTakeNode = -1;
+    this._pickupHomePos = new pc.Vec3();
+    this._pickupDropPos = new pc.Vec3();
+    this._pickupLocalPos = new pc.Vec3(0, 0, 0);
+    this._pickupLocalEuler = new pc.Vec3(0, 0, 0);
+    this._pickupLocalScale = new pc.Vec3(1, 1, 1);
+    this._handBoneNode = null;
+    this._grabSocketWorldPos = new pc.Vec3();
+    this._grabSocketWorldRot = new pc.Quat();
 
     if (this.entity.rigidbody) {
         this.entity.removeComponent('rigidbody');
@@ -39055,7 +39068,7 @@ RobotPathMove.prototype.initialize = function () {
     /**
      * 创建一个目标点可视化 Marker
      * 方便在场景中看到当前移动目标
-     */
+     *//*
         this._targetMarker = new pc.Entity('TargetMarker');
         this._targetMarker.addComponent('model', { type: 'box' });
         this._targetMarker.setLocalScale(0.3, 0.3, 0.3);
@@ -39068,7 +39081,7 @@ RobotPathMove.prototype.initialize = function () {
         this._targetLookMarker.setLocalScale(0.3, 0.3, 0.3);
 
         // 创建红色材质
-        var redMat = new pc.StandardMaterial();
+         var redMat = new pc.StandardMaterial();
         redMat.diffuse.set(1, 0, 0); // 红色
         redMat.update();
 
@@ -39077,7 +39090,7 @@ RobotPathMove.prototype.initialize = function () {
 
         var sceneRoot = this.app.root.findByName('SceneRoot');
         (sceneRoot || this.app.root).addChild(this._targetLookMarker);
-
+ */
     // Animator 组件
     this._anim = this.entity.anim || (this.animEntity && this.animEntity.anim);
 
@@ -39096,6 +39109,8 @@ RobotPathMove.prototype.initialize = function () {
         this._initLabelCanvas();
         this._updateLabel(this.path[0].showMessage);
     }
+
+    this._initPickupSystem();
 
     this._chartTimer = 0;
     var screenEntity = this.app.root.findByName('屏幕');
@@ -39130,6 +39145,14 @@ RobotPathMove.prototype.update = function (dt) {
     // 关键修复：每一帧都上传 Canvas 纹理，以便显示 ECharts 的动画效果
     if (this._chartTexture && this._chartCanvas) {
         this._chartTexture.upload();
+    }
+
+    this._updateGrabSocketPose();
+
+    if (window.__robotPauseAnimation) {
+        this._currentSpeed = 0;
+        this.setPlayerStatus(2);
+        return;
     }
 
     // 路径走完直接结束
@@ -39211,10 +39234,17 @@ RobotPathMove.prototype.update = function (dt) {
         // 第一次进入 take
         if (this._pauseTimer === 0) {
             this.setPlayerStatus(3); // idle → take
+            this._activeTakeNode = this._index;
+            this._takeActionDone = !1;
         }
 
         this._pauseTimer += dt;
         this.updateLookAt(node, dt);
+
+        if (!this._takeActionDone && this._activeTakeNode === this._index && this._pauseTimer >= 0.35) {
+            this._handleTakeAction(node);
+            this._takeActionDone = !0;
+        }
 
         if (this._pauseTimer >= this.pauseTime) {
             this._pauseTimer = 0;
@@ -39367,6 +39397,213 @@ RobotPathMove.prototype._applySmoothTurn = function (dt) {
 
     (this.animEntity || this.entity)
         .setEulerAngles(baseX, this._angle, baseZ);
+};
+
+RobotPathMove.prototype._initPickupSystem = function () {
+    var pickupNode = null;
+    var dropNode = null;
+    for (var i = 0; i < this.path.length; i++) {
+        var node = this.path[i];
+        if (!pickupNode && node.turn === 'take' && node.showMessage === '拿料中') {
+            pickupNode = node;
+        }
+        if (!dropNode && node.turn === 'take' && node.showMessage === '放料中') {
+            dropNode = node;
+        }
+    }
+
+    if (pickupNode && pickupNode.lookAt) {
+        this._pickupHomePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z);
+    } else {
+        this._pickupHomePos.set(1.0, 0.18, 5.2);
+    }
+
+    if (dropNode && dropNode.position) {
+        this._pickupDropPos.set(dropNode.position.x, 0.18, dropNode.position.z);
+    } else {
+        this._pickupDropPos.set(-1.2, 0.18, 4.5);
+    }
+
+    // 默认给一个可见的手持偏移，避免物品埋进手掌里
+    this._pickupLocalPos.set(0.30, -0.015, 0.05);
+    this._pickupLocalEuler.set(-20, 8, 82);
+
+    this._grabSocket = this._ensureGrabSocket();
+    this._pickupItem = this._ensurePickupCylinder();
+};
+
+RobotPathMove.prototype._collectMeshInstances = function (root, out) {
+    if (!root) return;
+    var comp = root.render || root.model;
+    if (comp && comp.meshInstances && comp.meshInstances.length) {
+        for (var i = 0; i < comp.meshInstances.length; i++) {
+            out.push(comp.meshInstances[i]);
+        }
+    }
+
+    var children = root.children || [];
+    for (var j = 0; j < children.length; j++) {
+        this._collectMeshInstances(children[j], out);
+    }
+};
+
+RobotPathMove.prototype._findBoneNodeFromMeshInstances = function (meshInstances, keywords) {
+    for (var i = 0; i < meshInstances.length; i++) {
+        var meshInstance = meshInstances[i];
+        var skinInstance = meshInstance && meshInstance.skinInstance;
+        var bones = skinInstance && skinInstance.bones;
+        if (!bones || !bones.length) continue;
+
+        for (var j = 0; j < bones.length; j++) {
+            var bone = bones[j];
+            var boneName = ((bone && bone.name) || '').toLowerCase();
+            for (var k = 0; k < keywords.length; k++) {
+                if (boneName.indexOf(keywords[k]) !== -1) {
+                    return bone;
+                }
+            }
+        }
+    }
+    return null;
+};
+
+RobotPathMove.prototype._findHandBoneNode = function () {
+    if (this._handBoneNode) return this._handBoneNode;
+
+    var root = this.animEntity || this.entity;
+    if (!root) return null;
+
+    var meshInstances = [];
+    this._collectMeshInstances(root, meshInstances);
+
+    var rightHandKeywords = [
+        'righthand',
+        'right_hand',
+        'hand_r',
+        'r hand',
+        'mixamorig:righthand',
+        'bip001 r hand'
+    ];
+    var leftHandKeywords = [
+        'lefthand',
+        'left_hand',
+        'hand_l',
+        'l hand',
+        'mixamorig:lefthand',
+        'bip001 l hand'
+    ];
+
+    this._handBoneNode =
+        this._findBoneNodeFromMeshInstances(meshInstances, rightHandKeywords) ||
+        this._findBoneNodeFromMeshInstances(meshInstances, leftHandKeywords) ||
+        this._findDescendantByKeywords(root, rightHandKeywords) ||
+        this._findDescendantByKeywords(root, leftHandKeywords) ||
+        null;
+
+    return this._handBoneNode;
+};
+
+RobotPathMove.prototype._findDescendantByKeywords = function (root, keywords) {
+    if (!root) return null;
+    var stack = [root];
+    while (stack.length) {
+        var node = stack.pop();
+        var name = (node.name || '').toLowerCase();
+        for (var i = 0; i < keywords.length; i++) {
+            if (name.indexOf(keywords[i]) !== -1) return node;
+        }
+        var children = node.children || [];
+        for (var j = 0; j < children.length; j++) stack.push(children[j]);
+    }
+    return null;
+};
+
+RobotPathMove.prototype._ensureGrabSocket = function () {
+    var sceneRoot = this.app.root.findByName('SceneRoot') || this.app.root;
+    var socket = this.app.root.findByName('GrabSocket_R');
+    if (socket) return socket;
+
+    socket = new pc.Entity('GrabSocket_R');
+    sceneRoot.addChild(socket);
+    socket.setPosition(0, 0, 0);
+    socket.setEulerAngles(0, 0, 0);
+    return socket;
+};
+
+RobotPathMove.prototype._ensurePickupCylinder = function () {
+    var item = this.app.root.findByName('AutoPickupCylinder');
+    if (!item) {
+        item = new pc.Entity('AutoPickupCylinder');
+        item.addComponent('model', {type: 'cylinder'});
+        item.setLocalScale(0.12, 0.18, 0.12);
+
+        var mat = new pc.StandardMaterial();
+        mat.diffuse.set(0.65, 0.65, 0.65);
+        mat.metalness = 0.1;
+        mat.gloss = 0.35;
+        mat.update();
+        item.model.material = mat;
+
+        var sceneRoot = this.app.root.findByName('SceneRoot');
+        (sceneRoot || this.app.root).addChild(item);
+    }
+
+    item.setPosition(this._pickupHomePos);
+    this._pickupLocalScale.copy(item.getLocalScale());
+    return item;
+};
+
+RobotPathMove.prototype._handleTakeAction = function (node) {
+    if (!node || !this._pickupItem) return;
+
+    if (node.showMessage === '拿料中' && !this._heldItem) {
+        this._attachPickupItemToHand();
+        return;
+    }
+
+    if (node.showMessage === '放料中' && this._heldItem) {
+        this._detachPickupItemToDropZone();
+    }
+};
+
+RobotPathMove.prototype._attachPickupItemToHand = function () {
+    if (!this._pickupItem || !this._grabSocket) return;
+
+    this._updateGrabSocketPose();
+    this._grabSocket.addChild(this._pickupItem);
+    this._pickupItem.setLocalPosition(this._pickupLocalPos);
+    this._pickupItem.setLocalEulerAngles(this._pickupLocalEuler);
+    this._pickupItem.setLocalScale(this._pickupLocalScale);
+    this._heldItem = this._pickupItem;
+};
+
+RobotPathMove.prototype._detachPickupItemToDropZone = function () {
+    if (!this._heldItem) return;
+
+    var sceneRoot = this.app.root.findByName('SceneRoot');
+    (sceneRoot || this.app.root).addChild(this._heldItem);
+    this._heldItem.setPosition(this._pickupDropPos);
+    this._heldItem.setEulerAngles(0, 0, 0);
+    this._heldItem.setLocalScale(this._pickupLocalScale);
+    this._heldItem = null;
+};
+
+RobotPathMove.prototype._updateGrabSocketPose = function () {
+    if (!this._grabSocket) return;
+
+    var handNode = this._findHandBoneNode();
+    if (handNode && handNode.getPosition && handNode.getRotation) {
+        this._grabSocketWorldPos.copy(handNode.getPosition());
+        this._grabSocketWorldRot.copy(handNode.getRotation());
+    } else {
+        var root = this.animEntity || this.entity;
+        if (!root) return;
+        this._grabSocketWorldPos.copy(root.getPosition());
+        this._grabSocketWorldRot.copy(root.getRotation());
+    }
+
+    this._grabSocket.setPosition(this._grabSocketWorldPos);
+    this._grabSocket.setRotation(this._grabSocketWorldRot);
 };
 
 /* =========================================================

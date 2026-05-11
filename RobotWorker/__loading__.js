@@ -182,6 +182,24 @@ pc.script.createLoadingScreen(function (app) {
             return svg;
         }
 
+        if (type === 'pause') {
+            var pr = document.createElementNS(ns, 'rect');
+            pr.setAttribute('x', '6');
+            pr.setAttribute('y', '5');
+            pr.setAttribute('width', '4');
+            pr.setAttribute('height', '14');
+            pr.setAttribute('rx', '1');
+            svg.appendChild(pr);
+            var pl = document.createElementNS(ns, 'rect');
+            pl.setAttribute('x', '14');
+            pl.setAttribute('y', '5');
+            pl.setAttribute('width', '4');
+            pl.setAttribute('height', '14');
+            pl.setAttribute('rx', '1');
+            svg.appendChild(pl);
+            return svg;
+        }
+
         var head = document.createElementNS(ns, 'path');
         head.setAttribute('d', 'M12 12a4 4 0 1 0-4-4a4 4 0 0 0 4 4');
         svg.appendChild(head);
@@ -220,6 +238,7 @@ pc.script.createLoadingScreen(function (app) {
             var btnThird = createToolbarButton('固定视角', 'fixed', '', true);
             var btnFixed = createToolbarButton('第三人称视角', 'third', '');
             var btnFirst = createToolbarButton('第一人称视角', 'first', '');
+            var btnPauseAnim = createToolbarButton('暂停动画', 'pause', 'toolbar-btn-pause-anim');
 
             var btnScene = createToolbarButton('查看场景物品', 'materials', 'toolbar-btn-materials');
             var btnHideTv = createToolbarButton('隐藏电视', 'tv', 'toolbar-btn-hide-tv');
@@ -229,6 +248,7 @@ pc.script.createLoadingScreen(function (app) {
             toolbar.appendChild(btnThird);
             toolbar.appendChild(btnFixed);
             toolbar.appendChild(btnFirst);
+            toolbar.appendChild(btnPauseAnim);
             toolbar.appendChild(createToolbarSeparator());
             toolbar.appendChild(btnScene);
             toolbar.appendChild(btnHideTv);
@@ -242,6 +262,7 @@ pc.script.createLoadingScreen(function (app) {
                 btnThird: btnThird,
                 btnFixed: btnFixed,
                 btnFirst: btnFirst,
+                btnPauseAnim: btnPauseAnim,
                 btnScene: btnScene,
                 btnHideTv: btnHideTv,
                 btnHideFence: btnHideFence,
@@ -293,6 +314,8 @@ pc.script.createLoadingScreen(function (app) {
 
         var viewMode = 'fixed';
         window.__robotViewMode = viewMode;
+        var isRobotPaused = false;
+        window.__robotPauseAnimation = isRobotPaused;
         var isSceneOpen = false;
         var isTvHidden = false;
         var isFenceHidden = false;
@@ -715,6 +738,11 @@ pc.script.createLoadingScreen(function (app) {
             }
         };
 
+        var syncPauseButton = function () {
+            if (isRobotPaused) ui.btnPauseAnim.classList.add('is-active');
+            else ui.btnPauseAnim.classList.remove('is-active');
+        };
+
         var exitPointerLock = function () {
             if (document.pointerLockElement) {
                 document.exitPointerLock();
@@ -730,6 +758,11 @@ pc.script.createLoadingScreen(function (app) {
             if (!playerEntity) playerEntity = app.root.findByName('player');
             if (!cameraEntity || !playerEntity) return false;
             return true;
+        };
+
+        var getRobotPathMove = function () {
+            if (!ensureCameraAndPlayer()) return null;
+            return playerEntity.script && playerEntity.script.robotPathMove ? playerEntity.script.robotPathMove : null;
         };
 
         var getFacingForwardXZ = function () {
@@ -874,6 +907,17 @@ pc.script.createLoadingScreen(function (app) {
             }
         });
         hookButton(ui.btnFirst, function () { setViewMode('first'); });
+        hookButton(ui.btnPauseAnim, function () {
+            isRobotPaused = !isRobotPaused;
+            window.__robotPauseAnimation = isRobotPaused;
+
+            var robotPathMove = getRobotPathMove();
+            if (isRobotPaused && robotPathMove && robotPathMove.setPlayerStatus) {
+                robotPathMove.setPlayerStatus(2);
+            }
+
+            syncPauseButton();
+        });
         hookButton(ui.btnScene, function () { setSceneOpen(!isSceneOpen); });
         hookButton(ui.btnHideTv, function () {
             applyTvHidden(!isTvHidden);
@@ -917,6 +961,8 @@ pc.script.createLoadingScreen(function (app) {
             tvDefaultHiddenInFixedApplied = true;
             applyTvHidden(true);
         }
+
+        syncPauseButton();
 
         app.on('update', onUpdate);
 
