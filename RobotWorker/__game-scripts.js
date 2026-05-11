@@ -39151,6 +39151,7 @@ RobotPathMove.prototype.update = function (dt) {
     }
 
     this._updateGrabSocketPose();
+    this._syncHeldItemPose();
 
     if (window.__robotPauseAnimation) {
         this._currentSpeed = 0;
@@ -39415,7 +39416,7 @@ RobotPathMove.prototype._initPickupSystem = function () {
     var pickupSpawnOffset = new pc.Vec3(0, 0, 0);
     // 圆柱体 attach 到手部挂点后的局部偏移（手部局部坐标）
     // 只影响物品抓在手上的位置，不影响场景里的初始摆放位置。
-    var pickupHandOffset = new pc.Vec3(0.08, -0.03, 0.02);
+    var pickupHandOffset = new pc.Vec3(0.08, 0.1, 0.02);
 
     for (var i = 0; i < this.path.length; i++) {
         var node = this.path[i];
@@ -39562,12 +39563,15 @@ RobotPathMove.prototype._ensurePickupCylinder = function () {
     if (!item) {
         item = new pc.Entity('AutoPickupCylinder');
         item.addComponent('model', {type: 'cylinder'});
-        item.setLocalScale(0.12, 0.18, 0.12);
+        // 缩小圆柱体，减少对手掌和手指的遮挡
+        item.setLocalScale(0.08, 0.12, 0.08);
 
         var mat = new pc.StandardMaterial();
         mat.diffuse.set(0.65, 0.65, 0.65);
         mat.metalness = 0.1;
         mat.gloss = 0.35;
+        mat.opacity = 0.9;
+        mat.blendType = pc.BLEND_NORMAL;
         mat.update();
         item.model.material = mat;
 
@@ -39598,10 +39602,8 @@ RobotPathMove.prototype._attachPickupItemToHand = function () {
 
     this._updateGrabSocketPose();
     this._grabSocket.addChild(this._pickupItem);
-    this._pickupItem.setLocalPosition(this._pickupLocalPos);
-    this._pickupItem.setLocalEulerAngles(this._pickupLocalEuler);
-    this._pickupItem.setLocalScale(this._pickupLocalScale);
     this._heldItem = this._pickupItem;
+    this._syncHeldItemPose();
 };
 
 RobotPathMove.prototype._detachPickupItemToDropZone = function () {
@@ -39613,6 +39615,14 @@ RobotPathMove.prototype._detachPickupItemToDropZone = function () {
     this._heldItem.setEulerAngles(0, 0, 0);
     this._heldItem.setLocalScale(this._pickupLocalScale);
     this._heldItem = null;
+};
+
+RobotPathMove.prototype._syncHeldItemPose = function () {
+    if (!this._heldItem) return;
+
+    this._heldItem.setLocalPosition(this._pickupLocalPos);
+    this._heldItem.setLocalEulerAngles(this._pickupLocalEuler);
+    this._heldItem.setLocalScale(this._pickupLocalScale);
 };
 
 RobotPathMove.prototype._updateGrabSocketPose = function () {
