@@ -38955,6 +38955,7 @@ RobotPathMove.prototype.initialize = function () {
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'openDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'take', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'puThing', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'closeDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '去检测', turn: '', position: { x: 0.6, y: 0, z: -6.4 }, lookAt: { x: 0.6, y: 0, z: -6.5 } },
         { showMessage: '检测中', turn: '', position: { x: 0.4, y: 0, z: -6.5 }, lookAt: { x: -2, y: 0, z: -6.5 } },
@@ -38965,6 +38966,7 @@ RobotPathMove.prototype.initialize = function () {
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'openDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'take', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'puThing', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'closeDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '去检测', turn: '', position: { x: 0.4, y: 0, z: -6.4 }, lookAt: { x: 0.4, y: 0, z: -6.5 } },
         { showMessage: '检测中', turn: '', position: { x: 0.4, y: 0, z: -6.5 }, lookAt: { x: -2, y: 0, z: -6.5 } },
@@ -39264,8 +39266,15 @@ RobotPathMove.prototype.update = function (dt) {
     // ===== openDoor 节点：触发开门 =====
     if (node.turn === 'openDoor') {
         this._currentSpeed = 0;
-        this._doorDir = 1; // 开始开门
-        this._index++;     // 立即进入下一节点，不阻塞
+        this.setPlayerStatus(2);
+        this.updateLookAt(node, dt);
+
+        if (this._doorProgress >= 1 && this._doorDir === 0) {
+            this._index++;
+            return;
+        }
+
+        this._doorDir = 1; // 开始开门，并等待门动画完成
         return;
     }
     // ===== closeDoor 节点：触发关门 =====
