@@ -27,6 +27,9 @@ RobotPathMove.attributes.add('slowDownDistance', { type: 'number', default: 0.8 
 // 普通拐点的保底速度比例，避免每个路径点都像急停再起步
 RobotPathMove.attributes.add('cornerSpeedRatio', { type: 'number', default: 0.35 });
 
+// 最大转身速度（度/秒），限制急转时的生硬感
+RobotPathMove.attributes.add('turnSpeed', { type: 'number', default: 240 });
+
 // pause 节点停留时间（秒）
 RobotPathMove.attributes.add('pauseTime', { type: 'number', default: 2 });
 
@@ -114,6 +117,25 @@ RobotPathMove.prototype.initialize = function () {
     this._angle = initEuler.y;   // 当前 Y 轴角度（用于插值）
     this._rotateSharpness = 10;
     this._currentSpeed = 0;
+    this._labelBaseEuler = new pc.Vec3();
+    this._labelWorldPos = new pc.Vec3();
+    this._labelCameraPos = new pc.Vec3();
+    this._grabSocket = null;
+    this._pickupItem = null;
+    this._heldItem = null;
+    this._takeActionDone = !1;
+    this._activeTakeNode = -1;
+    this._pickupSpawnBasePos = new pc.Vec3();
+    this._pickupSpawnPos = new pc.Vec3();
+    this._pickupHandLocalPos = new pc.Vec3();
+    this._pickupHomePos = new pc.Vec3();
+    this._pickupDropPos = new pc.Vec3();
+    this._pickupLocalPos = new pc.Vec3(0, 0, 0);
+    this._pickupLocalEuler = new pc.Vec3(0, 0, 0);
+    this._pickupLocalScale = new pc.Vec3(1, 1, 1);
+    this._handBoneNode = null;
+    this._grabSocketWorldPos = new pc.Vec3();
+    this._grabSocketWorldRot = new pc.Quat();
 
     if (this.entity.rigidbody) {
         this.entity.removeComponent('rigidbody');
@@ -155,29 +177,29 @@ RobotPathMove.prototype.initialize = function () {
     /**
      * 创建一个目标点可视化 Marker
      * 方便在场景中看到当前移动目标
-     */
-    this._targetMarker = new pc.Entity('TargetMarker');
-    this._targetMarker.addComponent('model', { type: 'box' });
-    this._targetMarker.setLocalScale(0.3, 0.3, 0.3);
+     *//*
+        this._targetMarker = new pc.Entity('TargetMarker');
+        this._targetMarker.addComponent('model', { type: 'box' });
+        this._targetMarker.setLocalScale(0.3, 0.3, 0.3);
 
-    var sceneRoot = this.app.root.findByName('SceneRoot');
-    (sceneRoot || this.app.root).addChild(this._targetMarker);
+        var sceneRoot = this.app.root.findByName('SceneRoot');
+        (sceneRoot || this.app.root).addChild(this._targetMarker);
 
-    this._targetLookMarker = new pc.Entity('TargetLookMarker');
-    this._targetLookMarker.addComponent('model', { type: 'sphere' });
-    this._targetLookMarker.setLocalScale(0.3, 0.3, 0.3);
+        this._targetLookMarker = new pc.Entity('TargetLookMarker');
+        this._targetLookMarker.addComponent('model', { type: 'sphere' });
+        this._targetLookMarker.setLocalScale(0.3, 0.3, 0.3);
 
-    // 创建红色材质
-    var redMat = new pc.StandardMaterial();
-    redMat.diffuse.set(1, 0, 0); // 红色
-    redMat.update();
+        // 创建红色材质
+         var redMat = new pc.StandardMaterial();
+        redMat.diffuse.set(1, 0, 0); // 红色
+        redMat.update();
 
-    // 应用材质
-    this._targetLookMarker.model.material = redMat;
+        // 应用材质
+        this._targetLookMarker.model.material = redMat;
 
-    var sceneRoot = this.app.root.findByName('SceneRoot');
-    (sceneRoot || this.app.root).addChild(this._targetLookMarker);
-
+        var sceneRoot = this.app.root.findByName('SceneRoot');
+        (sceneRoot || this.app.root).addChild(this._targetLookMarker);
+ */
     // Animator 组件
     this._anim = this.entity.anim || (this.animEntity && this.animEntity.anim);
 
@@ -192,9 +214,12 @@ RobotPathMove.prototype.initialize = function () {
     this._camera = this.app.root.findByName('Camera');
 
     if (this.labelPlane) {
+        this._labelBaseEuler.copy(this.labelPlane.getLocalEulerAngles());
         this._initLabelCanvas();
         this._updateLabel(this.path[0].showMessage);
     }
+
+    this._initPickupSystem();
 
     this._chartTimer = 0;
     var screenEntity = this.app.root.findByName('屏幕');
@@ -229,6 +254,15 @@ RobotPathMove.prototype.update = function (dt) {
     // 关键修复：每一帧都上传 Canvas 纹理，以便显示 ECharts 的动画效果
     if (this._chartTexture && this._chartCanvas) {
         this._chartTexture.upload();
+    }
+
+    this._updateGrabSocketPose();
+    this._syncHeldItemPose();
+
+    if (window.__robotPauseAnimation) {
+        this._currentSpeed = 0;
+        this.setPlayerStatus(2);
+        return;
     }
 
     // 路径走完直接结束
@@ -276,8 +310,7 @@ RobotPathMove.prototype.update = function (dt) {
 
     /* === Billboard === */
     if (this.labelPlane && this._camera) {
-        //this.labelPlane.lookAt(this._camera.getLocalPosition());
-        //this.labelPlane.setLocalPosition(0, this.labelOffsetY, 0);
+        this._updateLabelFacingForThirdPerson();
     }
 
     if (this._targetMarker) {
@@ -311,10 +344,22 @@ RobotPathMove.prototype.update = function (dt) {
         // 第一次进入 take
         if (this._pauseTimer === 0) {
             this.setPlayerStatus(3); // idle → take
+            this._activeTakeNode = this._index;
+            this._takeActionDone = !1;
         }
 
         this._pauseTimer += dt;
         this.updateLookAt(node, dt);
+
+        // 在 take 动作即将完成前再移动物品，避免一进入 take 就直接吸到手上。
+        // 数值表示“距离 take 结束还剩多少秒时”触发。
+        var takeMoveLeadTime = 0.2;
+        var takeActionTriggerTime = Math.max(0.05, this.pauseTime - takeMoveLeadTime);
+
+        if (!this._takeActionDone && this._activeTakeNode === this._index && this._pauseTimer >= takeActionTriggerTime) {
+            this._handleTakeAction(node);
+            this._takeActionDone = !0;
+        }
 
         if (this._pauseTimer >= this.pauseTime) {
             this._pauseTimer = 0;
@@ -419,16 +464,7 @@ RobotPathMove.prototype.updateMoveRotation = function (dt) {
     this._targetAngle =
         Math.atan2(dir.x, dir.z) * pc.math.RAD_TO_DEG;
 
-    // 角度插值（平滑转身，防抖）
-    this._angle = pc.math.lerpAngle(this._angle, this._targetAngle, 0.15);
-
-    // 只控制 Y 轴，X/Z 保持初始姿态
-    var baseX = this._baseEuler.x;
-    var baseZ = this._baseEuler.z;
-
-    // 优先控制 animEntity（模型）
-    (this.animEntity || this.entity)
-        .setEulerAngles(baseX, this._angle, baseZ);
+    this._applySmoothTurn(dt);
 };
 
 /* =========================================================
@@ -453,14 +489,269 @@ RobotPathMove.prototype.updateLookAt = function (node, dt) {
     // 使用 lookDir 计算目标角度
     this._targetAngle = Math.atan2(this._lookDir.x, this._lookDir.z) * pc.math.RAD_TO_DEG;
 
+    this._applySmoothTurn(dt);
+};
+
+RobotPathMove.prototype._applySmoothTurn = function (dt) {
+    var delta = this._targetAngle - this._angle;
+    while (delta > 180) delta -= 360;
+    while (delta < -180) delta += 360;
+
     var rotateLerp = 1 - Math.exp(-this._rotateSharpness * dt);
-    this._angle = pc.math.lerpAngle(this._angle, this._targetAngle, rotateLerp);
+    var lerpedAngle = this._angle + delta * rotateLerp;
+    var maxStep = this.turnSpeed * dt;
+    var limitedDelta = lerpedAngle - this._angle;
+
+    if (limitedDelta > maxStep) limitedDelta = maxStep;
+    if (limitedDelta < -maxStep) limitedDelta = -maxStep;
+
+    this._angle += limitedDelta;
 
     var baseX = this._baseEuler.x;
     var baseZ = this._baseEuler.z;
 
     (this.animEntity || this.entity)
         .setEulerAngles(baseX, this._angle, baseZ);
+};
+
+RobotPathMove.prototype._initPickupSystem = function () {
+    var pickupNode = null;
+    var dropNode = null;
+    // 圆柱体在场景中“待抓取时”的初始化摆放偏移（世界坐标偏移）
+    // 只影响物品在工位上的初始位置，不影响挂到手上后的相对位置。
+    var pickupSpawnOffset = new pc.Vec3(0, 0, 0);
+    // 圆柱体 attach 到手部挂点后的局部偏移（手部局部坐标）
+    // 只影响物品抓在手上的位置，不影响场景里的初始摆放位置。
+    var pickupHandOffset = new pc.Vec3(0.08, 0.1, 0.02);
+
+    for (var i = 0; i < this.path.length; i++) {
+        var node = this.path[i];
+        if (!pickupNode && node.turn === 'take' && node.showMessage === '拿料中') {
+            pickupNode = node;
+        }
+        if (!dropNode && node.turn === 'take' && node.showMessage === '放料中') {
+            dropNode = node;
+        }
+    }
+
+    // 这一段只负责“初始化摆放位置”：
+    // 基础点来自取料路径点，再叠加 pickupSpawnOffset。
+    if (pickupNode && pickupNode.lookAt) {
+        this._pickupSpawnBasePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z-0.28);
+    } else {
+        this._pickupSpawnBasePos.set(1.0, 0.18, 4.92);
+    }
+
+    this._pickupSpawnPos.copy(this._pickupSpawnBasePos);
+    this._pickupSpawnPos.add(pickupSpawnOffset);
+    this._pickupHomePos.copy(this._pickupSpawnPos);
+
+    // 放料高度与初始化摆放高度保持一致，避免取料和放料时一高一低。
+    // 同时将放料位置沿 Z 轴负方向轻微偏移一点，避免与原位置重合得过满。
+    if (dropNode && dropNode.position) {
+        this._pickupDropPos.set(dropNode.position.x-1, this._pickupHomePos.y, dropNode.position.z);
+    } else {
+        this._pickupDropPos.set(-2.2, this._pickupHomePos.y, 4.5);
+    }
+
+    // 手上抓取位置只由 pickupHandOffset 控制：
+    // 这里只影响 attach 到手上后的局部偏移，不参与初始化摆放。
+    this._pickupHandLocalPos.copy(pickupHandOffset);
+    this._pickupLocalPos.copy(this._pickupHandLocalPos);
+    this._pickupLocalEuler.set(0, 0, 90);
+
+    this._grabSocket = this._ensureGrabSocket();
+    this._updateGrabSocketPose();
+    if (this._grabSocket) {
+        // 初始化摆放高度、放料高度统一对齐到手部抬起后的物品高度。
+        var handRaisedItemY = this._grabSocket.getPosition().y + this._pickupLocalPos.y;
+        this._pickupHomePos.y = handRaisedItemY;
+        this._pickupDropPos.y = handRaisedItemY;
+    }
+    this._pickupItem = this._ensurePickupCylinder();
+};
+
+RobotPathMove.prototype._collectMeshInstances = function (root, out) {
+    if (!root) return;
+    var comp = root.render || root.model;
+    if (comp && comp.meshInstances && comp.meshInstances.length) {
+        for (var i = 0; i < comp.meshInstances.length; i++) {
+            out.push(comp.meshInstances[i]);
+        }
+    }
+
+    var children = root.children || [];
+    for (var j = 0; j < children.length; j++) {
+        this._collectMeshInstances(children[j], out);
+    }
+};
+
+RobotPathMove.prototype._findBoneNodeFromMeshInstances = function (meshInstances, keywords) {
+    for (var i = 0; i < meshInstances.length; i++) {
+        var meshInstance = meshInstances[i];
+        var skinInstance = meshInstance && meshInstance.skinInstance;
+        var bones = skinInstance && skinInstance.bones;
+        if (!bones || !bones.length) continue;
+
+        for (var j = 0; j < bones.length; j++) {
+            var bone = bones[j];
+            var boneName = ((bone && bone.name) || '').toLowerCase();
+            for (var k = 0; k < keywords.length; k++) {
+                if (boneName.indexOf(keywords[k]) !== -1) {
+                    return bone;
+                }
+            }
+        }
+    }
+    return null;
+};
+
+RobotPathMove.prototype._findHandBoneNode = function () {
+    if (this._handBoneNode) return this._handBoneNode;
+
+    var root = this.animEntity || this.entity;
+    if (!root) return null;
+
+    var meshInstances = [];
+    this._collectMeshInstances(root, meshInstances);
+
+    var rightHandKeywords = [
+        'righthand',
+        'right_hand',
+        'hand_r',
+        'r hand',
+        'mixamorig:righthand',
+        'bip001 r hand'
+    ];
+    var leftHandKeywords = [
+        'lefthand',
+        'left_hand',
+        'hand_l',
+        'l hand',
+        'mixamorig:lefthand',
+        'bip001 l hand'
+    ];
+
+    this._handBoneNode =
+        this._findBoneNodeFromMeshInstances(meshInstances, rightHandKeywords) ||
+        this._findBoneNodeFromMeshInstances(meshInstances, leftHandKeywords) ||
+        this._findDescendantByKeywords(root, rightHandKeywords) ||
+        this._findDescendantByKeywords(root, leftHandKeywords) ||
+        null;
+
+    return this._handBoneNode;
+};
+
+RobotPathMove.prototype._findDescendantByKeywords = function (root, keywords) {
+    if (!root) return null;
+    var stack = [root];
+    while (stack.length) {
+        var node = stack.pop();
+        var name = (node.name || '').toLowerCase();
+        for (var i = 0; i < keywords.length; i++) {
+            if (name.indexOf(keywords[i]) !== -1) return node;
+        }
+        var children = node.children || [];
+        for (var j = 0; j < children.length; j++) stack.push(children[j]);
+    }
+    return null;
+};
+
+RobotPathMove.prototype._ensureGrabSocket = function () {
+    var sceneRoot = this.app.root.findByName('SceneRoot') || this.app.root;
+    var socket = this.app.root.findByName('GrabSocket_R');
+    if (socket) return socket;
+
+    socket = new pc.Entity('GrabSocket_R');
+    sceneRoot.addChild(socket);
+    socket.setPosition(0, 0, 0);
+    socket.setEulerAngles(0, 0, 0);
+    return socket;
+};
+
+RobotPathMove.prototype._ensurePickupCylinder = function () {
+    var item = this.app.root.findByName('AutoPickupCylinder');
+    if (!item) {
+        item = new pc.Entity('AutoPickupCylinder');
+        item.addComponent('model', {type: 'cylinder'});
+        // 缩小圆柱体，减少对手掌和手指的遮挡
+        item.setLocalScale(0.08, 0.12, 0.08);
+
+        var mat = new pc.StandardMaterial();
+        mat.diffuse.set(0.65, 0.65, 0.65);
+        mat.metalness = 0.1;
+        mat.gloss = 0.35;
+        mat.opacity = 0.9;
+        mat.blendType = pc.BLEND_NORMAL;
+        mat.update();
+        item.model.material = mat;
+
+        var sceneRoot = this.app.root.findByName('SceneRoot');
+        (sceneRoot || this.app.root).addChild(item);
+    }
+
+    item.setPosition(this._pickupHomePos);
+    this._pickupLocalScale.copy(item.getLocalScale());
+    return item;
+};
+
+RobotPathMove.prototype._handleTakeAction = function (node) {
+    if (!node || !this._pickupItem) return;
+
+    if (node.showMessage === '拿料中' && !this._heldItem) {
+        this._attachPickupItemToHand();
+        return;
+    }
+
+    if (node.showMessage === '放料中' && this._heldItem) {
+        this._detachPickupItemToDropZone();
+    }
+};
+
+RobotPathMove.prototype._attachPickupItemToHand = function () {
+    if (!this._pickupItem || !this._grabSocket) return;
+
+    this._updateGrabSocketPose();
+    this._grabSocket.addChild(this._pickupItem);
+    this._heldItem = this._pickupItem;
+    this._syncHeldItemPose();
+};
+
+RobotPathMove.prototype._detachPickupItemToDropZone = function () {
+    if (!this._heldItem) return;
+
+    var sceneRoot = this.app.root.findByName('SceneRoot');
+    (sceneRoot || this.app.root).addChild(this._heldItem);
+    this._heldItem.setPosition(this._pickupDropPos);
+    this._heldItem.setEulerAngles(0, 0, 0);
+    this._heldItem.setLocalScale(this._pickupLocalScale);
+    this._heldItem = null;
+};
+
+RobotPathMove.prototype._syncHeldItemPose = function () {
+    if (!this._heldItem) return;
+
+    this._heldItem.setLocalPosition(this._pickupLocalPos);
+    this._heldItem.setLocalEulerAngles(this._pickupLocalEuler);
+    this._heldItem.setLocalScale(this._pickupLocalScale);
+};
+
+RobotPathMove.prototype._updateGrabSocketPose = function () {
+    if (!this._grabSocket) return;
+
+    var handNode = this._findHandBoneNode();
+    if (handNode && handNode.getPosition && handNode.getRotation) {
+        this._grabSocketWorldPos.copy(handNode.getPosition());
+        this._grabSocketWorldRot.copy(handNode.getRotation());
+    } else {
+        var root = this.animEntity || this.entity;
+        if (!root) return;
+        this._grabSocketWorldPos.copy(root.getPosition());
+        this._grabSocketWorldRot.copy(root.getRotation());
+    }
+
+    this._grabSocket.setPosition(this._grabSocketWorldPos);
+    this._grabSocket.setRotation(this._grabSocketWorldRot);
 };
 
 /* =========================================================
@@ -595,6 +886,26 @@ RobotPathMove.prototype._updateLabel = function (text) {
     ctx.fillText(text, w / 2, h / 2);
 
     this._labelTexture.upload();
+};
+
+RobotPathMove.prototype._updateLabelFacingForThirdPerson = function () {
+    if (!this.labelPlane) return;
+
+    if (window.__robotViewMode !== 'third' || !this._camera) {
+        this.labelPlane.setLocalEulerAngles(this._labelBaseEuler);
+        return;
+    }
+
+    this._labelWorldPos.copy(this.labelPlane.getPosition());
+    this._labelCameraPos.copy(this._camera.getPosition());
+    this._labelCameraPos.y = this._labelWorldPos.y;
+
+    var dx = this._labelCameraPos.x - this._labelWorldPos.x;
+    var dz = this._labelCameraPos.z - this._labelWorldPos.z;
+    if (Math.abs(dx) <= 1e-4 && Math.abs(dz) <= 1e-4) return;
+
+    var yaw = Math.atan2(dx, dz) * pc.math.RAD_TO_DEG;
+    this.labelPlane.setLocalEulerAngles(90, yaw, 0);
 };
 
 /* 背景颜色策略 */
