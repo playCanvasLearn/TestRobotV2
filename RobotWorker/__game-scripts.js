@@ -39152,6 +39152,7 @@ RobotPathMove.prototype.update = function (dt) {
         this._chartTexture.upload();
     }
 
+    // 每帧先刷新抓取挂点的世界姿态，再让当前手持物体同步到该挂点，保证抓取跟随稳定。
     this._updateGrabSocketPose();
     this._syncHeldItemPose();
 
@@ -39171,6 +39172,8 @@ RobotPathMove.prototype.update = function (dt) {
 
     var pos = this.entity.getLocalPosition();
 
+    // 连续的空动作节点如果与当前位置重合，且下一节点只是同一配置的重复点，则直接跳过，
+    // 避免机器人在导出的冗余路径点上停顿或重复刷新同一状态。
     while (node && node.turn === '' && this._index + 1 < this.path.length) {
         var samePoint = Math.abs(target.x - pos.x) <= this.arriveDistance &&
             Math.abs(target.z - pos.z) <= this.arriveDistance;
@@ -39217,6 +39220,7 @@ RobotPathMove.prototype.update = function (dt) {
         this._targetLookMarker.setLocalPosition(look.x, look.y, look.z);
     }
 
+    // 特殊节点优先于普通移动处理：它们通过 turn 字段驱动停留、抓取、开关门等状态机。
     // ===== pause 节点：walk → idle（纯停留）=====
     if (node.turn === 'pause') {
         this._currentSpeed = 0;
@@ -39301,14 +39305,14 @@ RobotPathMove.prototype.update = function (dt) {
             this._currentSpeed = 0;
         }
 
-        // 精确贴点
+        // 到点后先精确贴到目标坐标，避免因为 dt 或浮点误差导致越走越偏。
         this.entity.setLocalPosition(
             target.x,
             target.y,
             target.z
         );
 
-        // 切换到另一个点
+        // 再切到下一个路径点；真正的移动逻辑留到下一帧统一处理。
         this._index = this._index + 1 ;
         return;
     }
@@ -39324,6 +39328,9 @@ RobotPathMove.prototype.update = function (dt) {
     var minCornerSpeed = needsFullStop ? 0 : this.moveSpeed * this.cornerSpeedRatio;
     var desiredSpeed = this.moveSpeed;
 
+    // 接近目标时逐步减速：
+    // 1. 下一节点是特殊动作时，允许降到 0，方便原地切状态；
+    // 2. 下一节点仍然是普通移动点时，保留一个最小过弯速度，让运动更连贯。
     if (dist < slowDownDistance) {
         desiredSpeed = Math.max(minCornerSpeed, this.moveSpeed * slowFactor);
     }
