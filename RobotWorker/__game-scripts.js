@@ -39440,10 +39440,12 @@ RobotPathMove.prototype._initPickupSystem = function () {
     this._pickupSpawnPos.add(pickupSpawnOffset);
     this._pickupHomePos.copy(this._pickupSpawnPos);
 
+    // 放料高度与初始化摆放高度保持一致，避免取料和放料时一高一低。
+    // 同时将放料位置沿 Z 轴负方向轻微偏移一点，避免与原位置重合得过满。
     if (dropNode && dropNode.position) {
-        this._pickupDropPos.set(dropNode.position.x, 0.18, dropNode.position.z);
+        this._pickupDropPos.set(dropNode.position.x-1, this._pickupHomePos.y, dropNode.position.z);
     } else {
-        this._pickupDropPos.set(-1.2, 0.18, 4.5);
+        this._pickupDropPos.set(-2.2, this._pickupHomePos.y, 4.5);
     }
 
     // 手上抓取位置只由 pickupHandOffset 控制：
@@ -39455,7 +39457,10 @@ RobotPathMove.prototype._initPickupSystem = function () {
     this._grabSocket = this._ensureGrabSocket();
     this._updateGrabSocketPose();
     if (this._grabSocket) {
-        this._pickupHomePos.y = this._grabSocket.getPosition().y + this._pickupLocalPos.y;
+        // 初始化摆放高度、放料高度统一对齐到手部抬起后的物品高度。
+        var handRaisedItemY = this._grabSocket.getPosition().y + this._pickupLocalPos.y;
+        this._pickupHomePos.y = handRaisedItemY;
+        this._pickupDropPos.y = handRaisedItemY;
     }
     this._pickupItem = this._ensurePickupCylinder();
 };
