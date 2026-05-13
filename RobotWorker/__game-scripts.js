@@ -39021,6 +39021,9 @@ RobotPathMove.prototype.initialize = function () {
     this._heldItem = null;
     this._takeActionDone = !1;
     this._activeActionKey = '';
+    this._pickupGlowShell = null;
+    this._pickupGlowMaterial = null;
+    this._pickupGlowTime = 0;
     this._pickupSpawnBasePos = new pc.Vec3();
     this._pickupSpawnPos = new pc.Vec3();
     this._pickupHandLocalPos = new pc.Vec3();
@@ -39155,6 +39158,7 @@ RobotPathMove.prototype.update = function (dt) {
     // 每帧先刷新抓取挂点的世界姿态，再让当前手持物体同步到该挂点，保证抓取跟随稳定。
     this._updateGrabSocketPose();
     this._syncHeldItemPose();
+    this._updatePickupSelectionFx(dt);
 
     if (window.__robotPauseAnimation) {
         this._currentSpeed = 0;
@@ -39594,6 +39598,9 @@ RobotPathMove.prototype._ensurePickupCylinder = function () {
         (sceneRoot || this.app.root).addChild(item);
     }
 
+    this._ensurePickupSelectionFx(item);
+    this._setPickupSelectionFxEnabled(!this._heldItem);
+
     item.setPosition(this._pickupHomePos);
     this._pickupLocalScale.copy(item.getLocalScale());
     return item;
@@ -39641,6 +39648,7 @@ RobotPathMove.prototype._attachPickupItemToHand = function () {
     this._updateGrabSocketPose();
     this._grabSocket.addChild(this._pickupItem);
     this._heldItem = this._pickupItem;
+    this._setPickupSelectionFxEnabled(false);
     this._syncHeldItemPose();
 };
 
@@ -39653,6 +39661,59 @@ RobotPathMove.prototype._detachPickupItemToDropZone = function () {
     this._heldItem.setEulerAngles(0, 0, 0);
     this._heldItem.setLocalScale(this._pickupLocalScale);
     this._heldItem = null;
+    this._setPickupSelectionFxEnabled(true);
+};
+
+RobotPathMove.prototype._ensurePickupSelectionFx = function (item) {
+    if (!item) return;
+
+    var glowShell = item.findByName('PickupGlowShell');
+    if (!glowShell) {
+        glowShell = new pc.Entity('PickupGlowShell');
+        glowShell.addComponent('model', { type: 'cylinder', castShadows: false, receiveShadows: false });
+        glowShell.setLocalPosition(0, 0, 0);
+        glowShell.setLocalEulerAngles(0, 0, 0);
+        item.addChild(glowShell);
+    }
+
+    var glowMat = glowShell.model.material;
+    if (!glowMat || glowMat.name !== 'PickupGlowMaterial') {
+        glowMat = new pc.StandardMaterial();
+        glowMat.name = 'PickupGlowMaterial';
+        glowMat.diffuse.set(0.15, 0.75, 1.0);
+        glowMat.emissive.set(0.2, 0.85, 1.0);
+        glowMat.emissiveIntensity = 1.6;
+        glowMat.opacity = 0.28;
+        glowMat.blendType = pc.BLEND_ADDITIVEALPHA;
+        glowMat.useLighting = false;
+        glowMat.depthWrite = false;
+        glowMat.cull = pc.CULLFACE_NONE;
+        glowMat.update();
+        glowShell.model.material = glowMat;
+    }
+
+    this._pickupGlowShell = glowShell;
+    this._pickupGlowMaterial = glowMat;
+    this._pickupGlowShell.enabled = true;
+};
+
+RobotPathMove.prototype._setPickupSelectionFxEnabled = function (enabled) {
+    if (!this._pickupGlowShell) return;
+    this._pickupGlowShell.enabled = !!enabled;
+};
+
+RobotPathMove.prototype._updatePickupSelectionFx = function (dt) {
+    if (!this._pickupGlowShell || !this._pickupGlowMaterial || !this._pickupGlowShell.enabled) return;
+
+    this._pickupGlowTime += dt;
+
+    var pulse = 0.5 + 0.5 * Math.sin(this._pickupGlowTime * 4.2);
+    var scale = 1.35 + pulse * 0.18;
+    this._pickupGlowShell.setLocalScale(scale, 1.08 + pulse * 0.2, scale);
+
+    this._pickupGlowMaterial.opacity = 0.14 + pulse * 0.14;
+    this._pickupGlowMaterial.emissiveIntensity = 1.2 + pulse * 1.3;
+    this._pickupGlowMaterial.update();
 };
 
 RobotPathMove.prototype._syncHeldItemPose = function () {
