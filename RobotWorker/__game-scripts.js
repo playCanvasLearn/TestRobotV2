@@ -39063,6 +39063,7 @@ RobotPathMove.prototype.initialize = function () {
     this._exitSignHalfHeight = 0.15;
     this._exitSignPulseTime = 0;
     this._exitSignClickTime = 0;
+    this._exitDoorClickTime = 0;
     this._exitPopupRoot = null;
 
     if (this.entity.rigidbody) {
@@ -39985,10 +39986,12 @@ RobotPathMove.prototype._updateExitDoorFx = function (dt) {
     if (!this._exitDoorTargets || !this._exitDoorTargets.length) return;
 
     this._exitDoorTime += dt * this.exitDoorSpeed;
+    this._exitDoorClickTime = Math.max(0, this._exitDoorClickTime - dt);
 
     var pulse = 0.5 + 0.5 * Math.sin(this._exitDoorTime);
     var openOffset = this.exitDoorOpenDistance * pulse;
-    var emissiveIntensity = 1.0 + pulse * 1.8;
+    var clickBoost = this._exitDoorClickTime > 0 ? this._exitDoorClickTime / 0.25 : 0;
+    var emissiveIntensity = 1.0 + pulse * 1.8 + clickBoost * 1.8;
 
     for (var i = 0; i < this._exitDoorTargets.length; i++) {
         var target = this._exitDoorTargets[i];
@@ -40068,11 +40071,8 @@ RobotPathMove.prototype._ensureExitSign = function (maxY, minX, maxX, minZ, maxZ
 
     this._exitSignBasePos.set(this._exitDoorCenter.x, maxY + 0.42, this._exitDoorCenter.z);
     sign.setPosition(this._exitSignBasePos);
-    if (this._exitDoorMoveAxis === 'x') {
-        sign.setEulerAngles(90, 0, 0);
-    } else {
-        sign.setEulerAngles(90, 90, 0);
-    }
+    // 固定面向 +X 方向，避免随门轴切换后出现倾斜难读。
+    sign.setEulerAngles(90, 90, 0);
     sign.setLocalScale(signWidth, 1, signHeight);
 
     var sceneRoot = this.app.root.findByName('SceneRoot');
@@ -40192,7 +40192,7 @@ RobotPathMove.prototype._ensureExitPopupUi = function () {
     contact.style.color = 'rgba(235,245,240,0.9)';
     contact.innerHTML =
         '<div style="font-weight:700;color:rgba(95,255,174,0.98);margin-bottom:6px;">总部地址</div>' +
-        '<div>📍上海市杨浦区军工路1146号</div>' +
+        '<div>上海市杨浦区军工路1146号</div>' +
         '<div>服务热线：021-65494608</div>';
 
     var actions = document.createElement('div');
@@ -40317,6 +40317,31 @@ RobotPathMove.prototype._isPointerOnExitSign = function (camera, screenX, screen
         Math.abs(screenY - center.y) <= halfHeightPx;
 };
 
+RobotPathMove.prototype._isPointerOnExitDoor = function (camera, screenX, screenY) {
+    if (!camera || !this._exitDoorTargets || !this._exitDoorTargets.length) return !1;
+
+    var minX = Infinity;
+    var maxX = -Infinity;
+    var minY = Infinity;
+    var maxY = -Infinity;
+
+    for (var i = 0; i < this._exitDoorTargets.length; i++) {
+        var pos = this._exitDoorTargets[i].node.getPosition();
+        var screen = camera.worldToScreen(pos);
+        if (screen.x < minX) minX = screen.x;
+        if (screen.x > maxX) maxX = screen.x;
+        if (screen.y < minY) minY = screen.y;
+        if (screen.y > maxY) maxY = screen.y;
+    }
+
+    var padX = 70;
+    var padY = 120;
+    return screenX >= minX - padX &&
+        screenX <= maxX + padX &&
+        screenY >= minY - padY &&
+        screenY <= maxY + padY;
+};
+
 /* =========================================================
  * 鼠标点击：输出点击到地面的世界坐标（调试用）
  * ========================================================= */
@@ -40333,6 +40358,12 @@ RobotPathMove.prototype.onMouseDown = function (event) {
 
     if (this._isPointerOnExitSign(camera, event.x, event.y)) {
         this._exitSignClickTime = 0.25;
+        this._showExitPopup();
+        return;
+    }
+
+    if (this._isPointerOnExitDoor(camera, event.x, event.y)) {
+        this._exitDoorClickTime = 0.25;
         this._showExitPopup();
         return;
     }
