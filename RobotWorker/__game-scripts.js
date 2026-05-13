@@ -38955,7 +38955,7 @@ RobotPathMove.prototype.initialize = function () {
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'openDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'take', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
-        { showMessage: '加工中', turn: 'puThing', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'closeDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '去检测', turn: '', position: { x: 0.6, y: 0, z: -6.4 }, lookAt: { x: 0.6, y: 0, z: -6.5 } },
         { showMessage: '检测中', turn: '', position: { x: 0.4, y: 0, z: -6.5 }, lookAt: { x: -2, y: 0, z: -6.5 } },
@@ -38966,7 +38966,7 @@ RobotPathMove.prototype.initialize = function () {
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'openDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'take', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
-        { showMessage: '加工中', turn: 'puThing', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'closeDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '去检测', turn: '', position: { x: 0.4, y: 0, z: -6.4 }, lookAt: { x: 0.4, y: 0, z: -6.5 } },
         { showMessage: '检测中', turn: '', position: { x: 0.4, y: 0, z: -6.5 }, lookAt: { x: -2, y: 0, z: -6.5 } },
@@ -39020,7 +39020,7 @@ RobotPathMove.prototype.initialize = function () {
     this._pickupItem = null;
     this._heldItem = null;
     this._takeActionDone = !1;
-    this._activeTakeNode = -1;
+    this._activeActionKey = '';
     this._pickupSpawnBasePos = new pc.Vec3();
     this._pickupSpawnPos = new pc.Vec3();
     this._pickupHandLocalPos = new pc.Vec3();
@@ -39224,31 +39224,26 @@ RobotPathMove.prototype.update = function (dt) {
     // ===== pause 节点：walk → idle（纯停留）=====
     if (node.turn === 'pause') {
         this._currentSpeed = 0;
-        // 第一次进入 pause
-        if (this._pauseTimer === 0) {
+        if (this._beginSpecialAction(node)) {
             this.setPlayerStatus(2); // walk → idle
         }
 
-        this._pauseTimer += dt;
+        this._advanceSpecialAction(dt);
         this.updateLookAt(node, dt);
 
         if (this._pauseTimer >= this.pauseTime) {
-            this._pauseTimer = 0;
-            this._index++;
+            this._finishSpecialAction();
         }
         return;
     }
     // ===== take 节点：idle → take =====
     if (node.turn === 'take') {
         this._currentSpeed = 0;
-        // 第一次进入 take
-        if (this._pauseTimer === 0) {
+        if (this._beginSpecialAction(node)) {
             this.setPlayerStatus(3); // idle → take
-            this._activeTakeNode = this._index;
-            this._takeActionDone = !1;
         }
 
-        this._pauseTimer += dt;
+        this._advanceSpecialAction(dt);
         this.updateLookAt(node, dt);
 
         // 在 take 动作即将完成前再移动物品，避免一进入 take 就直接吸到手上。
@@ -39256,14 +39251,13 @@ RobotPathMove.prototype.update = function (dt) {
         var takeMoveLeadTime = 0.2;
         var takeActionTriggerTime = Math.max(0.05, this.pauseTime - takeMoveLeadTime);
 
-        if (!this._takeActionDone && this._activeTakeNode === this._index && this._pauseTimer >= takeActionTriggerTime) {
+        if (!this._takeActionDone && this._pauseTimer >= takeActionTriggerTime) {
             this._handleTakeAction(node);
             this._takeActionDone = !0;
         }
 
         if (this._pauseTimer >= this.pauseTime) {
-            this._pauseTimer = 0;
-            this._index++;
+            this._finishSpecialAction();
         }
         return;
     }
@@ -39616,6 +39610,29 @@ RobotPathMove.prototype._handleTakeAction = function (node) {
     if (node.showMessage === '放料中' && this._heldItem) {
         this._detachPickupItemToDropZone();
     }
+};
+
+RobotPathMove.prototype._beginSpecialAction = function (node) {
+    var actionKey = this._index + ':' + (node && node.turn ? node.turn : '');
+    if (this._activeActionKey === actionKey) {
+        return !1;
+    }
+
+    this._activeActionKey = actionKey;
+    this._pauseTimer = 0;
+    this._takeActionDone = !1;
+    return !0;
+};
+
+RobotPathMove.prototype._advanceSpecialAction = function (dt) {
+    this._pauseTimer += dt;
+};
+
+RobotPathMove.prototype._finishSpecialAction = function () {
+    this._pauseTimer = 0;
+    this._takeActionDone = !1;
+    this._activeActionKey = '';
+    this._index++;
 };
 
 RobotPathMove.prototype._attachPickupItemToHand = function () {
