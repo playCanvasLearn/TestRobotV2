@@ -40132,57 +40132,130 @@ RobotPathMove.prototype._ensureExitPopupUi = function () {
     overlay.style.zIndex = '10020';
 
     var panel = document.createElement('div');
-    panel.style.width = 'min(420px, calc(100vw - 32px))';
-    panel.style.borderRadius = '18px';
-    panel.style.border = '1px solid rgba(58, 255, 154, 0.26)';
-    panel.style.background = 'linear-gradient(180deg, rgba(13,24,21,0.96), rgba(9,15,18,0.96))';
-    panel.style.boxShadow = '0 18px 48px rgba(0,0,0,0.35)';
-    panel.style.padding = '18px 18px 16px 18px';
+    panel.style.width = 'min(520px, calc(100vw - 32px))';
+    panel.style.borderRadius = '22px';
+    panel.style.border = '1px solid rgba(58, 255, 154, 0.24)';
+    panel.style.background = 'linear-gradient(180deg, rgba(13,24,21,0.97), rgba(8,14,17,0.98))';
+    panel.style.boxShadow = '0 24px 60px rgba(0,0,0,0.42)';
+    panel.style.padding = '22px 22px 18px 22px';
     panel.style.color = 'rgba(235, 245, 240, 0.96)';
     panel.style.fontFamily = 'Arial, sans-serif';
+    panel.style.backdropFilter = 'blur(10px)';
 
     var title = document.createElement('div');
-    title.textContent = 'EXIT 出口';
-    title.style.fontSize = '18px';
+    title.textContent = '上海机床厂';
+    title.style.fontSize = '22px';
     title.style.fontWeight = '700';
-    title.style.letterSpacing = '0.4px';
+    title.style.letterSpacing = '0.6px';
     title.style.color = 'rgba(95, 255, 174, 0.98)';
 
     var desc = document.createElement('div');
-    desc.textContent = '已点击出口门标识。这里可以继续接入和 M3-mart 一样的业务弹框内容。';
-    desc.style.marginTop = '12px';
+    desc.textContent = '上海机床厂始建于 1946 年，是中国大型精密磨床制造企业，在国内磨床行业长期处于领先地位。';
+    desc.style.marginTop = '14px';
     desc.style.fontSize = '14px';
     desc.style.lineHeight = '1.65';
     desc.style.color = 'rgba(235, 245, 240, 0.86)';
 
+    var sectionTitle = document.createElement('div');
+    sectionTitle.textContent = '核心产品：';
+    sectionTitle.style.marginTop = '16px';
+    sectionTitle.style.fontSize = '15px';
+    sectionTitle.style.fontWeight = '700';
+    sectionTitle.style.color = 'rgba(235, 245, 240, 0.96)';
+
+    var productList = document.createElement('div');
+    productList.style.marginTop = '10px';
+    productList.style.display = 'grid';
+    productList.style.gap = '10px';
+
+    var products = ['精密磨削机床', '数控磨床', '大型工业加工机床'];
+    for (var i = 0; i < products.length; i++) {
+        var item = document.createElement('div');
+        item.textContent = products[i];
+        item.style.padding = '10px 12px';
+        item.style.borderRadius = '12px';
+        item.style.border = '1px solid rgba(255,255,255,0.08)';
+        item.style.background = 'rgba(255,255,255,0.04)';
+        item.style.color = 'rgba(235,245,240,0.92)';
+        item.style.fontSize = '14px';
+        productList.appendChild(item);
+    }
+
+    var contact = document.createElement('div');
+    contact.style.marginTop = '18px';
+    contact.style.padding = '14px 14px';
+    contact.style.borderRadius = '14px';
+    contact.style.background = 'rgba(58,255,154,0.08)';
+    contact.style.border = '1px solid rgba(58,255,154,0.12)';
+    contact.style.lineHeight = '1.75';
+    contact.style.fontSize = '14px';
+    contact.style.color = 'rgba(235,245,240,0.9)';
+    contact.innerHTML =
+        '<div style="font-weight:700;color:rgba(95,255,174,0.98);margin-bottom:6px;">总部地址</div>' +
+        '<div>📍上海市杨浦区军工路1146号</div>' +
+        '<div>服务热线：021-65494608</div>';
+
     var actions = document.createElement('div');
     actions.style.display = 'flex';
     actions.style.justifyContent = 'flex-end';
-    actions.style.marginTop = '18px';
+    actions.style.gap = '10px';
+    actions.style.marginTop = '20px';
 
-    var closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.textContent = '关闭';
-    closeBtn.style.height = '38px';
-    closeBtn.style.minWidth = '88px';
-    closeBtn.style.padding = '0 16px';
-    closeBtn.style.borderRadius = '10px';
-    closeBtn.style.border = '1px solid rgba(58,255,154,0.28)';
-    closeBtn.style.background = 'rgba(58,255,154,0.12)';
-    closeBtn.style.color = 'rgba(228,255,240,0.95)';
-    closeBtn.style.cursor = 'pointer';
+    var buyBtn = document.createElement('button');
+    buyBtn.type = 'button';
+    buyBtn.textContent = '去购买';
 
-    actions.appendChild(closeBtn);
+    var visitBtn = document.createElement('button');
+    visitBtn.type = 'button';
+    visitBtn.textContent = '去参观';
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = '取消';
+
+    var buttons = [buyBtn, visitBtn, cancelBtn];
+    for (var j = 0; j < buttons.length; j++) {
+        var btn = buttons[j];
+        btn.style.height = '40px';
+        btn.style.minWidth = '92px';
+        btn.style.padding = '0 16px';
+        btn.style.borderRadius = '12px';
+        btn.style.cursor = 'pointer';
+        btn.style.fontSize = '14px';
+        btn.style.fontWeight = '600';
+        btn.style.transition = 'transform 120ms ease, opacity 120ms ease';
+    }
+
+    buyBtn.style.border = '1px solid rgba(58,255,154,0.30)';
+    buyBtn.style.background = 'linear-gradient(180deg, rgba(58,255,154,0.26), rgba(58,255,154,0.12))';
+    buyBtn.style.color = 'rgba(228,255,240,0.98)';
+
+    visitBtn.style.border = '1px solid rgba(84,170,255,0.30)';
+    visitBtn.style.background = 'linear-gradient(180deg, rgba(84,170,255,0.24), rgba(84,170,255,0.10))';
+    visitBtn.style.color = 'rgba(233,244,255,0.98)';
+
+    cancelBtn.style.border = '1px solid rgba(255,255,255,0.12)';
+    cancelBtn.style.background = 'rgba(255,255,255,0.06)';
+    cancelBtn.style.color = 'rgba(228,255,240,0.88)';
+
+    actions.appendChild(buyBtn);
+    actions.appendChild(visitBtn);
+    actions.appendChild(cancelBtn);
     panel.appendChild(title);
     panel.appendChild(desc);
+    panel.appendChild(sectionTitle);
+    panel.appendChild(productList);
+    panel.appendChild(contact);
     panel.appendChild(actions);
     overlay.appendChild(panel);
     document.body.appendChild(overlay);
 
     var self = this;
-    closeBtn.addEventListener('click', function () {
+    cancelBtn.addEventListener('click', function () {
         self._hideExitPopup();
     });
+    buyBtn.addEventListener('click', function () {});
+    visitBtn.addEventListener('click', function () {});
     overlay.addEventListener('click', function (e) {
         if (e.target === overlay) self._hideExitPopup();
     });
@@ -40224,27 +40297,24 @@ RobotPathMove.prototype._updateExitSignFx = function (dt) {
     }
 };
 
-RobotPathMove.prototype._isPointerOnExitSign = function (from, to) {
-    if (!this._exitSignEntity) return !1;
+RobotPathMove.prototype._isPointerOnExitSign = function (camera, screenX, screenY) {
+    if (!this._exitSignEntity || !camera) return !1;
 
-    var inv = new pc.Mat4();
-    inv.copy(this._exitSignEntity.getWorldTransform()).invert();
+    var center = camera.worldToScreen(this._exitSignBasePos);
+    var rightWorld = this._exitSignEntity.right.clone().scale(this._exitSignHalfWidth);
+    var upWorld = this._exitSignEntity.up.clone().scale(this._exitSignHalfHeight);
 
-    var localFrom = new pc.Vec3();
-    var localTo = new pc.Vec3();
-    inv.transformPoint(from, localFrom);
-    inv.transformPoint(to, localTo);
+    var rightPoint = this._exitSignBasePos.clone().add(rightWorld);
+    var upPoint = this._exitSignBasePos.clone().add(upWorld);
 
-    var dy = localTo.y - localFrom.y;
-    if (Math.abs(dy) < 1e-6) return !1;
+    var rightScreen = camera.worldToScreen(rightPoint);
+    var upScreen = camera.worldToScreen(upPoint);
 
-    var t = -localFrom.y / dy;
-    if (t < 0 || t > 1) return !1;
+    var halfWidthPx = Math.max(28, Math.abs(rightScreen.x - center.x) + 12);
+    var halfHeightPx = Math.max(16, Math.abs(upScreen.y - center.y) + 10);
 
-    var hitX = localFrom.x + (localTo.x - localFrom.x) * t;
-    var hitZ = localFrom.z + (localTo.z - localFrom.z) * t;
-
-    return Math.abs(hitX) <= this._exitSignHalfWidth && Math.abs(hitZ) <= this._exitSignHalfHeight;
+    return Math.abs(screenX - center.x) <= halfWidthPx &&
+        Math.abs(screenY - center.y) <= halfHeightPx;
 };
 
 /* =========================================================
@@ -40261,7 +40331,7 @@ RobotPathMove.prototype.onMouseDown = function (event) {
     var from = camera.screenToWorld(event.x, event.y, camera.nearClip);
     var to   = camera.screenToWorld(event.x, event.y, camera.farClip);
 
-    if (this._isPointerOnExitSign(from, to)) {
+    if (this._isPointerOnExitSign(camera, event.x, event.y)) {
         this._exitSignClickTime = 0.25;
         this._showExitPopup();
         return;
