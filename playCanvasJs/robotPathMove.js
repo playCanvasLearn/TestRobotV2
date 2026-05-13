@@ -166,6 +166,8 @@ RobotPathMove.prototype.initialize = function () {
     this._exitSignPulseTime = 0;
     this._exitSignClickTime = 0;
     this._exitDoorClickTime = 0;
+    this._isExitDoorHovered = !1;
+    this._exitDoorHoverLerp = 0;
     this._exitPopupRoot = null;
 
     if (this.entity.rigidbody) {
@@ -177,6 +179,7 @@ RobotPathMove.prototype.initialize = function () {
 
     // 监听鼠标点击（用于调试坐标）
     this.app.mouse.on(pc.EVENT_MOUSEDOWN, this.onMouseDown, this);
+    this.app.mouse.on(pc.EVENT_MOUSEMOVE, this.onMouseMove, this);
 
     /* ===== 门控制初始化 ===== */
     this._leftDoor = null;
@@ -1054,11 +1057,16 @@ RobotPathMove.prototype._updateExitDoorFx = function (dt) {
 
     this._exitDoorTime += dt * this.exitDoorSpeed;
     this._exitDoorClickTime = Math.max(0, this._exitDoorClickTime - dt);
+    this._exitDoorHoverLerp += (((this._isExitDoorHovered ? 1 : 0) - this._exitDoorHoverLerp) * Math.min(1, dt * 10));
 
     var pulse = 0.5 + 0.5 * Math.sin(this._exitDoorTime);
     var openOffset = this.exitDoorOpenDistance * pulse;
     var clickBoost = this._exitDoorClickTime > 0 ? this._exitDoorClickTime / 0.25 : 0;
-    var emissiveIntensity = 1.0 + pulse * 1.8 + clickBoost * 1.8;
+    var hoverBoost = this._exitDoorHoverLerp;
+    var emissiveIntensity = 0.55 + pulse * 0.85 + hoverBoost * 2.4 + clickBoost * 0.55;
+    var emissiveR = 0.0 + hoverBoost * 0.30;
+    var emissiveG = 0.55 + hoverBoost * 0.45;
+    var emissiveB = 0.18 + hoverBoost * 0.50;
 
     for (var i = 0; i < this._exitDoorTargets.length; i++) {
         var target = this._exitDoorTargets[i];
@@ -1074,6 +1082,7 @@ RobotPathMove.prototype._updateExitDoorFx = function (dt) {
     }
 
     for (var j = 0; j < this._exitDoorMaterials.length; j++) {
+        this._exitDoorMaterials[j].emissive.set(emissiveR, emissiveG, emissiveB);
         this._exitDoorMaterials[j].emissiveIntensity = emissiveIntensity;
         this._exitDoorMaterials[j].update();
     }
@@ -1407,6 +1416,20 @@ RobotPathMove.prototype._isPointerOnExitDoor = function (camera, screenX, screen
         screenX <= maxX + padX &&
         screenY >= minY - padY &&
         screenY <= maxY + padY;
+};
+
+RobotPathMove.prototype.onMouseMove = function (event) {
+    var cameraEntity = this.app.root.findByName('Camera');
+    if (!cameraEntity || !cameraEntity.camera) return;
+
+    var camera = cameraEntity.camera;
+    var isDoorHovered = this._isPointerOnExitDoor(camera, event.x, event.y);
+    var isSignHovered = this._isPointerOnExitSign(camera, event.x, event.y);
+
+    this._isExitDoorHovered = isDoorHovered;
+
+    var canvas = this.app.graphicsDevice && this.app.graphicsDevice.canvas;
+    if (canvas) canvas.style.cursor = (isDoorHovered || isSignHovered) ? 'pointer' : 'default';
 };
 
 /* =========================================================
