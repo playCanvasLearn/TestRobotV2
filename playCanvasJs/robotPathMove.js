@@ -32,6 +32,10 @@ RobotPathMove.attributes.add('turnSpeed', { type: 'number', default: 240 });
 
 // pause 节点停留时间（秒）
 RobotPathMove.attributes.add('pauseTime', { type: 'number', default: 2 });
+RobotPathMove.attributes.add('putItemRiseHeight', { type: 'number', default: 0.45 });
+RobotPathMove.attributes.add('putItemMoveDistance', { type: 'number', default: 0.9 });
+RobotPathMove.attributes.add('putItemDuration', { type: 'number', default: 1.8 });
+RobotPathMove.attributes.add('putItemRotateTurns', { type: 'number', default: 2 });
 
 RobotPathMove.attributes.add('labelPlane', { type: 'entity' });
 RobotPathMove.attributes.add('labelOffsetY', { type: 'number', default: 1.8 });
@@ -128,6 +132,8 @@ RobotPathMove.prototype.initialize = function () {
     this._pickupGlowShell = null;
     this._pickupGlowMaterial = null;
     this._pickupGlowTime = 0;
+    this._putItemActive = !1;
+    this._putItemTime = 0;
     this._pickupSpawnBasePos = new pc.Vec3();
     this._pickupSpawnPos = new pc.Vec3();
     this._pickupHandLocalPos = new pc.Vec3();
@@ -139,6 +145,10 @@ RobotPathMove.prototype.initialize = function () {
     this._handBoneNode = null;
     this._grabSocketWorldPos = new pc.Vec3();
     this._grabSocketWorldRot = new pc.Quat();
+    this._putItemStartPos = new pc.Vec3();
+    this._putItemMidPos = new pc.Vec3();
+    this._putItemEndPos = new pc.Vec3();
+    this._putItemBaseEuler = new pc.Vec3();
 
     if (this.entity.rigidbody) {
         this.entity.removeComponent('rigidbody');
@@ -269,6 +279,8 @@ RobotPathMove.prototype.update = function (dt) {
         return;
     }
 
+    this._updatePutItemAction(dt);
+
     // 路径走完直接结束
     if (this._index >= this.path.length) {
         this._resetPickupToHomeState();
@@ -370,6 +382,14 @@ RobotPathMove.prototype.update = function (dt) {
             this._pauseTimer = 0;
             this._index++;
         }
+        return;
+    }
+    // ===== putItem 节点：非阻塞抛出/放置物品 =====
+    if (node.turn === 'putItem') {
+        this._currentSpeed = 0;
+        this.updateLookAt(node, dt);
+        this._startPutItemAction();
+        this._index++;
         return;
     }
     // ===== openDoor 节点：触发开门 =====
@@ -727,17 +747,23 @@ RobotPathMove.prototype._resetPickupToHomeState = function () {
     this._pickupItem.setLocalScale(this._pickupLocalScale);
 
     this._heldItem = null;
+    this._putItemActive = !1;
+    this._putItemTime = 0;
     this._takeActionDone = !1;
     this._pickupGlowTime = 0;
+    this._setPickupSelectionFxMode('default');
     this._setPickupSelectionFxEnabled(true);
 };
 
 RobotPathMove.prototype._attachPickupItemToHand = function () {
     if (!this._pickupItem || !this._grabSocket) return;
 
+    this._putItemActive = !1;
+    this._putItemTime = 0;
     this._updateGrabSocketPose();
     this._grabSocket.addChild(this._pickupItem);
     this._heldItem = this._pickupItem;
+    this._setPickupSelectionFxMode('default');
     this._setPickupSelectionFxEnabled(false);
     this._syncHeldItemPose();
 };
@@ -751,7 +777,79 @@ RobotPathMove.prototype._detachPickupItemToDropZone = function () {
     this._heldItem.setEulerAngles(0, 0, 0);
     this._heldItem.setLocalScale(this._pickupLocalScale);
     this._heldItem = null;
+    this._setPickupSelectionFxMode('default');
     this._setPickupSelectionFxEnabled(true);
+};
+
+RobotPathMove.prototype._startPutItemAction = function () {
+    if (!this._pickupItem || this._putItemActive) return;
+
+    var sceneRoot = this.app.root.findByName('SceneRoot');
+    var worldRoot = sceneRoot || this.app.root;
+    var item = this._pickupItem;
+
+    this._putItemStartPos.copy(item.getPosition());
+    this._putItemBaseEuler.copy(item.getEulerAngles());
+    this._putItemMidPos.copy(this._putItemStartPos);
+    this._putItemMidPos.y += this.putItemRiseHeight;
+    this._putItemEndPos.copy(this._putItemMidPos);
+    this._putItemEndPos.x -= this.putItemMoveDistance;
+
+    worldRoot.addChild(item);
+    item.setPosition(this._putItemStartPos);
+    item.setEulerAngles(this._putItemBaseEuler);
+    item.setLocalScale(this._pickupLocalScale);
+
+    this._heldItem = null;
+    this._putItemActive = !0;
+    this._putItemTime = 0;
+    this._pickupGlowTime = 0;
+    this._setPickupSelectionFxMode('putItem');
+    this._setPickupSelectionFxEnabled(true);
+};
+
+RobotPathMove.prototype._updatePutItemAction = function (dt) {
+    if (!this._putItemActive || !this._pickupItem) return;
+
+    this._putItemTime += dt;
+
+    var duration = Math.max(0.1, this.putItemDuration);
+    var progress = pc.math.clamp(this._putItemTime / duration, 0, 1);
+    var riseRatio = 0.4;
+    var moveProgress = 0;
+    var eased = 0;
+    var x = this._putItemStartPos.x;
+    var y = this._putItemStartPos.y;
+    var z = this._putItemStartPos.z;
+
+    if (progress < riseRatio) {
+        eased = progress / riseRatio;
+        eased = eased * eased * (3 - 2 * eased);
+        x = pc.math.lerp(this._putItemStartPos.x, this._putItemMidPos.x, eased);
+        y = pc.math.lerp(this._putItemStartPos.y, this._putItemMidPos.y, eased);
+        z = pc.math.lerp(this._putItemStartPos.z, this._putItemMidPos.z, eased);
+    } else {
+        moveProgress = (progress - riseRatio) / Math.max(1e-4, 1 - riseRatio);
+        eased = moveProgress * moveProgress * (3 - 2 * moveProgress);
+        x = pc.math.lerp(this._putItemMidPos.x, this._putItemEndPos.x, eased);
+        y = pc.math.lerp(this._putItemMidPos.y, this._putItemEndPos.y, eased);
+        z = pc.math.lerp(this._putItemMidPos.z, this._putItemEndPos.z, eased);
+    }
+
+    this._pickupItem.setPosition(x, y, z);
+    this._pickupItem.setEulerAngles(
+        this._putItemBaseEuler.x,
+        this._putItemBaseEuler.y + 360 * this.putItemRotateTurns * progress,
+        this._putItemBaseEuler.z
+    );
+    this._pickupItem.setLocalScale(this._pickupLocalScale);
+
+    if (progress >= 1) {
+        this._putItemActive = !1;
+        this._pickupGlowTime = 0;
+        this._setPickupSelectionFxEnabled(false);
+        this._attachPickupItemToHand();
+    }
 };
 
 RobotPathMove.prototype._ensurePickupSelectionFx = function (item) {
@@ -784,7 +882,22 @@ RobotPathMove.prototype._ensurePickupSelectionFx = function (item) {
 
     this._pickupGlowShell = glowShell;
     this._pickupGlowMaterial = glowMat;
+    this._setPickupSelectionFxMode('default');
     this._pickupGlowShell.enabled = true;
+};
+
+RobotPathMove.prototype._setPickupSelectionFxMode = function (mode) {
+    if (!this._pickupGlowMaterial) return;
+
+    if (mode === 'putItem') {
+        this._pickupGlowMaterial.diffuse.set(1.0, 0.18, 0.12);
+        this._pickupGlowMaterial.emissive.set(1.0, 0.12, 0.08);
+    } else {
+        this._pickupGlowMaterial.diffuse.set(0.15, 0.75, 1.0);
+        this._pickupGlowMaterial.emissive.set(0.2, 0.85, 1.0);
+    }
+
+    this._pickupGlowMaterial.update();
 };
 
 RobotPathMove.prototype._setPickupSelectionFxEnabled = function (enabled) {
