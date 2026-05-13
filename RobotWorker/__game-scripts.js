@@ -39168,6 +39168,7 @@ RobotPathMove.prototype.update = function (dt) {
 
     // 路径走完直接结束
     if (this._index >= this.path.length) {
+        this._resetPickupToHomeState();
         this._index = 0;
     };
 
@@ -39640,6 +39641,22 @@ RobotPathMove.prototype._finishSpecialAction = function () {
     this._takeActionDone = !1;
     this._activeActionKey = '';
     this._index++;
+};
+
+RobotPathMove.prototype._resetPickupToHomeState = function () {
+    if (!this._pickupItem) return;
+
+    var sceneRoot = this.app.root.findByName('SceneRoot');
+    (sceneRoot || this.app.root).addChild(this._pickupItem);
+
+    this._pickupItem.setPosition(this._pickupHomePos);
+    this._pickupItem.setEulerAngles(0, 0, 0);
+    this._pickupItem.setLocalScale(this._pickupLocalScale);
+
+    this._heldItem = null;
+    this._takeActionDone = !1;
+    this._pickupGlowTime = 0;
+    this._setPickupSelectionFxEnabled(true);
 };
 
 RobotPathMove.prototype._attachPickupItemToHand = function () {
