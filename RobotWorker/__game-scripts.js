@@ -38930,6 +38930,8 @@ RobotPathMove.attributes.add('putItemRiseHeight', { type: 'number', default: 0.4
 RobotPathMove.attributes.add('putItemMoveDistance', { type: 'number', default: 0.9 });
 RobotPathMove.attributes.add('putItemDuration', { type: 'number', default: 1.8 });
 RobotPathMove.attributes.add('putItemRotateTurns', { type: 'number', default: 2 });
+RobotPathMove.attributes.add('exitDoorOpenDistance', { type: 'number', default: 0.18 });
+RobotPathMove.attributes.add('exitDoorSpeed', { type: 'number', default: 1.4 });
 
 RobotPathMove.attributes.add('labelPlane', { type: 'entity' });
 RobotPathMove.attributes.add('labelOffsetY', { type: 'number', default: 1.8 });
@@ -39047,6 +39049,21 @@ RobotPathMove.prototype.initialize = function () {
     this._putItemMidPos = new pc.Vec3();
     this._putItemEndPos = new pc.Vec3();
     this._putItemBaseEuler = new pc.Vec3();
+    this._exitDoorTargets = [];
+    this._exitDoorMaterials = [];
+    this._exitDoorTime = 0;
+    this._exitDoorCenter = new pc.Vec3();
+    this._exitDoorMoveAxis = 'x';
+    this._exitSignEntity = null;
+    this._exitSignMaterial = null;
+    this._exitSignTexture = null;
+    this._exitSignCanvas = null;
+    this._exitSignBasePos = new pc.Vec3();
+    this._exitSignHalfWidth = 0.5;
+    this._exitSignHalfHeight = 0.15;
+    this._exitSignPulseTime = 0;
+    this._exitSignClickTime = 0;
+    this._exitPopupRoot = null;
 
     if (this.entity.rigidbody) {
         this.entity.removeComponent('rigidbody');
@@ -39131,6 +39148,7 @@ RobotPathMove.prototype.initialize = function () {
     }
 
     this._initPickupSystem();
+    this._initExitDoorFx();
 
     this._chartTimer = 0;
     var screenEntity = this.app.root.findByName('屏幕');
@@ -39158,6 +39176,7 @@ RobotPathMove.prototype.update = function (dt) {
 
     /* ===== 始终更新的逻辑 (门动画、图表刷新) ===== */
     this._updateDoors(dt);
+    this._updateExitDoorFx(dt);
 
     // 更新图表数据逻辑
     this._updateChart(dt);
@@ -39878,6 +39897,356 @@ RobotPathMove.prototype._updateGrabSocketPose = function () {
     this._grabSocket.setRotation(this._grabSocketWorldRot);
 };
 
+RobotPathMove.prototype._initExitDoorFx = function () {
+    // 用户需求里 Mesh_155 重复出现，这里按出口门连续门片补全到 Mesh_156。
+    var nameSet = {
+        Mesh_153: !0,
+        Mesh_154: !0,
+        Mesh_155: !0,
+        Mesh_156: !0
+    };
+    var nodes = [];
+    var meshInstances = [];
+
+    this.app.root.forEach(function (node) {
+        var mis = null;
+        if (node.render && node.render.meshInstances) mis = node.render.meshInstances;
+        else if (node.model && node.model.meshInstances) mis = node.model.meshInstances;
+        if (!mis || !mis.length) return;
+
+        for (var i = 0; i < mis.length; i++) {
+            var mi = mis[i];
+            var nodeName = mi && mi.node && mi.node.name ? mi.node.name : '';
+            var meshName = mi && mi.mesh && mi.mesh.name ? mi.mesh.name : '';
+            if (!nameSet[nodeName] && !nameSet[meshName]) continue;
+
+            meshInstances.push(mi);
+            if (mi.node && nodes.indexOf(mi.node) === -1) nodes.push(mi.node);
+        }
+    });
+
+    if (!nodes.length) return;
+
+    this._exitDoorTargets = [];
+    this._exitDoorMaterials = [];
+    this._exitDoorCenter.set(0, 0, 0);
+
+    var minX = Infinity;
+    var maxX = -Infinity;
+    var maxY = -Infinity;
+    var minZ = Infinity;
+    var maxZ = -Infinity;
+
+    for (var j = 0; j < nodes.length; j++) {
+        var worldPos = nodes[j].getPosition().clone();
+        this._exitDoorCenter.add(worldPos);
+        if (worldPos.x < minX) minX = worldPos.x;
+        if (worldPos.x > maxX) maxX = worldPos.x;
+        if (worldPos.y > maxY) maxY = worldPos.y;
+        if (worldPos.z < minZ) minZ = worldPos.z;
+        if (worldPos.z > maxZ) maxZ = worldPos.z;
+    }
+
+    this._exitDoorCenter.scale(1 / nodes.length);
+    this._exitDoorMoveAxis = (maxX - minX) >= (maxZ - minZ) ? 'x' : 'z';
+
+    for (var k = 0; k < nodes.length; k++) {
+        var doorNode = nodes[k];
+        var baseWorldPos = doorNode.getPosition().clone();
+        var delta = this._exitDoorMoveAxis === 'x'
+            ? baseWorldPos.x - this._exitDoorCenter.x
+            : baseWorldPos.z - this._exitDoorCenter.z;
+        var sign = delta >= 0 ? 1 : -1;
+
+        this._exitDoorTargets.push({
+            node: doorNode,
+            baseWorldPos: baseWorldPos,
+            sign: sign
+        });
+    }
+
+    for (var m = 0; m < meshInstances.length; m++) {
+        var meshInstance = meshInstances[m];
+        if (!meshInstance || !meshInstance.material || !meshInstance.material.clone) continue;
+
+        var cloned = meshInstance.material.clone();
+        if (cloned.emissive && cloned.emissive.set) cloned.emissive.set(0.0, 1.0, 0.35);
+        if (cloned.emissiveIntensity !== undefined) cloned.emissiveIntensity = 1.2;
+        if (cloned.update) cloned.update();
+        meshInstance.material = cloned;
+        this._exitDoorMaterials.push(cloned);
+    }
+
+    this._ensureExitSign(maxY, minX, maxX, minZ, maxZ);
+    this._ensureExitPopupUi();
+};
+
+RobotPathMove.prototype._updateExitDoorFx = function (dt) {
+    if (!this._exitDoorTargets || !this._exitDoorTargets.length) return;
+
+    this._exitDoorTime += dt * this.exitDoorSpeed;
+
+    var pulse = 0.5 + 0.5 * Math.sin(this._exitDoorTime);
+    var openOffset = this.exitDoorOpenDistance * pulse;
+    var emissiveIntensity = 1.0 + pulse * 1.8;
+
+    for (var i = 0; i < this._exitDoorTargets.length; i++) {
+        var target = this._exitDoorTargets[i];
+        var base = target.baseWorldPos;
+        var x = base.x;
+        var y = base.y;
+        var z = base.z;
+
+        if (this._exitDoorMoveAxis === 'x') x += target.sign * openOffset;
+        else z += target.sign * openOffset;
+
+        target.node.setPosition(x, y, z);
+    }
+
+    for (var j = 0; j < this._exitDoorMaterials.length; j++) {
+        this._exitDoorMaterials[j].emissiveIntensity = emissiveIntensity;
+        this._exitDoorMaterials[j].update();
+    }
+
+    this._updateExitSignFx(dt);
+};
+
+RobotPathMove.prototype._ensureExitSign = function (maxY, minX, maxX, minZ, maxZ) {
+    if (this._exitSignEntity) return;
+
+    var canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    canvas.style.display = 'none';
+    document.body.appendChild(canvas);
+    this._exitSignCanvas = canvas;
+
+    var ctx = canvas.getContext('2d');
+    this._drawExitSignCanvas(ctx, canvas.width, canvas.height);
+
+    var tex = new pc.Texture(this.app.graphicsDevice, {
+        format: pc.PIXELFORMAT_R8_G8_B8_A8,
+        autoMipmap: false,
+        minFilter: pc.FILTER_LINEAR,
+        magFilter: pc.FILTER_LINEAR,
+        addressU: pc.ADDRESS_CLAMP_TO_EDGE,
+        addressV: pc.ADDRESS_CLAMP_TO_EDGE
+    });
+    tex.setSource(canvas);
+    this._exitSignTexture = tex;
+
+    var mat = new pc.StandardMaterial();
+    mat.name = 'ExitSignMaterial';
+    mat.diffuseMap = tex;
+    mat.emissiveMap = tex;
+    mat.opacityMap = tex;
+    mat.opacityMapChannel = 'a';
+    mat.diffuse.set(1, 1, 1);
+    mat.emissive.set(0.1, 1.0, 0.4);
+    mat.emissiveIntensity = 1.3;
+    mat.opacity = 1;
+    mat.blendType = pc.BLEND_NORMAL;
+    mat.useLighting = false;
+    mat.depthWrite = false;
+    mat.cull = pc.CULLFACE_NONE;
+    mat.update();
+    this._exitSignMaterial = mat;
+
+    var sign = new pc.Entity('ExitSign');
+    sign.addComponent('model', {
+        type: 'plane',
+        castShadows: false,
+        receiveShadows: false
+    });
+    sign.model.material = mat;
+
+    var span = this._exitDoorMoveAxis === 'x' ? (maxX - minX) : (maxZ - minZ);
+    var signWidth = Math.max(0.75, span * 0.75);
+    var signHeight = 0.24;
+    this._exitSignHalfWidth = signWidth * 0.5;
+    this._exitSignHalfHeight = signHeight * 0.5;
+
+    this._exitSignBasePos.set(this._exitDoorCenter.x, maxY + 0.42, this._exitDoorCenter.z);
+    sign.setPosition(this._exitSignBasePos);
+    if (this._exitDoorMoveAxis === 'x') {
+        sign.setEulerAngles(90, 0, 0);
+    } else {
+        sign.setEulerAngles(90, 90, 0);
+    }
+    sign.setLocalScale(signWidth, 1, signHeight);
+
+    var sceneRoot = this.app.root.findByName('SceneRoot');
+    (sceneRoot || this.app.root).addChild(sign);
+    this._exitSignEntity = sign;
+};
+
+RobotPathMove.prototype._drawExitSignCanvas = function (ctx, width, height) {
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = 'rgba(4, 22, 10, 0.70)';
+    ctx.strokeStyle = 'rgba(53, 255, 148, 0.95)';
+    ctx.lineWidth = 12;
+
+    var x = 28;
+    var y = 28;
+    var w = width - 56;
+    var h = height - 56;
+    var r = 24;
+
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.shadowColor = 'rgba(53,255,148,0.85)';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = 'rgba(230, 255, 240, 1)';
+    ctx.font = 'bold 118px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('EXIT', width * 0.5, height * 0.54);
+    ctx.shadowBlur = 0;
+};
+
+RobotPathMove.prototype._ensureExitPopupUi = function () {
+    if (this._exitPopupRoot) return;
+
+    var overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.display = 'none';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.background = 'rgba(2, 6, 12, 0.58)';
+    overlay.style.backdropFilter = 'blur(8px)';
+    overlay.style.zIndex = '10020';
+
+    var panel = document.createElement('div');
+    panel.style.width = 'min(420px, calc(100vw - 32px))';
+    panel.style.borderRadius = '18px';
+    panel.style.border = '1px solid rgba(58, 255, 154, 0.26)';
+    panel.style.background = 'linear-gradient(180deg, rgba(13,24,21,0.96), rgba(9,15,18,0.96))';
+    panel.style.boxShadow = '0 18px 48px rgba(0,0,0,0.35)';
+    panel.style.padding = '18px 18px 16px 18px';
+    panel.style.color = 'rgba(235, 245, 240, 0.96)';
+    panel.style.fontFamily = 'Arial, sans-serif';
+
+    var title = document.createElement('div');
+    title.textContent = 'EXIT 出口';
+    title.style.fontSize = '18px';
+    title.style.fontWeight = '700';
+    title.style.letterSpacing = '0.4px';
+    title.style.color = 'rgba(95, 255, 174, 0.98)';
+
+    var desc = document.createElement('div');
+    desc.textContent = '已点击出口门标识。这里可以继续接入和 M3-mart 一样的业务弹框内容。';
+    desc.style.marginTop = '12px';
+    desc.style.fontSize = '14px';
+    desc.style.lineHeight = '1.65';
+    desc.style.color = 'rgba(235, 245, 240, 0.86)';
+
+    var actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.justifyContent = 'flex-end';
+    actions.style.marginTop = '18px';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '关闭';
+    closeBtn.style.height = '38px';
+    closeBtn.style.minWidth = '88px';
+    closeBtn.style.padding = '0 16px';
+    closeBtn.style.borderRadius = '10px';
+    closeBtn.style.border = '1px solid rgba(58,255,154,0.28)';
+    closeBtn.style.background = 'rgba(58,255,154,0.12)';
+    closeBtn.style.color = 'rgba(228,255,240,0.95)';
+    closeBtn.style.cursor = 'pointer';
+
+    actions.appendChild(closeBtn);
+    panel.appendChild(title);
+    panel.appendChild(desc);
+    panel.appendChild(actions);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    var self = this;
+    closeBtn.addEventListener('click', function () {
+        self._hideExitPopup();
+    });
+    overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) self._hideExitPopup();
+    });
+
+    this._exitPopupRoot = overlay;
+};
+
+RobotPathMove.prototype._showExitPopup = function () {
+    if (!this._exitPopupRoot) this._ensureExitPopupUi();
+    if (this._exitPopupRoot) this._exitPopupRoot.style.display = 'flex';
+};
+
+RobotPathMove.prototype._hideExitPopup = function () {
+    if (this._exitPopupRoot) this._exitPopupRoot.style.display = 'none';
+};
+
+RobotPathMove.prototype._updateExitSignFx = function (dt) {
+    if (!this._exitSignEntity || !this._exitSignMaterial) return;
+
+    this._exitSignPulseTime += dt;
+    this._exitSignClickTime = Math.max(0, this._exitSignClickTime - dt);
+
+    var basePulse = 0.5 + 0.5 * Math.sin(this._exitSignPulseTime * 2.8);
+    var clickBoost = this._exitSignClickTime > 0 ? this._exitSignClickTime / 0.25 : 0;
+    var scaleBoost = 1 + basePulse * 0.04 + clickBoost * 0.08;
+
+    this._exitSignEntity.setPosition(this._exitSignBasePos);
+    this._exitSignEntity.setLocalScale(
+        this._exitSignHalfWidth * 2 * scaleBoost,
+        1,
+        this._exitSignHalfHeight * 2 * scaleBoost
+    );
+
+    this._exitSignMaterial.emissiveIntensity = 1.3 + basePulse * 0.8 + clickBoost * 1.6;
+    this._exitSignMaterial.update();
+
+    if (this._exitSignTexture && this._exitSignCanvas) {
+        this._exitSignTexture.upload();
+    }
+};
+
+RobotPathMove.prototype._isPointerOnExitSign = function (from, to) {
+    if (!this._exitSignEntity) return !1;
+
+    var inv = new pc.Mat4();
+    inv.copy(this._exitSignEntity.getWorldTransform()).invert();
+
+    var localFrom = new pc.Vec3();
+    var localTo = new pc.Vec3();
+    inv.transformPoint(from, localFrom);
+    inv.transformPoint(to, localTo);
+
+    var dy = localTo.y - localFrom.y;
+    if (Math.abs(dy) < 1e-6) return !1;
+
+    var t = -localFrom.y / dy;
+    if (t < 0 || t > 1) return !1;
+
+    var hitX = localFrom.x + (localTo.x - localFrom.x) * t;
+    var hitZ = localFrom.z + (localTo.z - localFrom.z) * t;
+
+    return Math.abs(hitX) <= this._exitSignHalfWidth && Math.abs(hitZ) <= this._exitSignHalfHeight;
+};
+
 /* =========================================================
  * 鼠标点击：输出点击到地面的世界坐标（调试用）
  * ========================================================= */
@@ -39891,6 +40260,12 @@ RobotPathMove.prototype.onMouseDown = function (event) {
     // 屏幕坐标 → 世界射线
     var from = camera.screenToWorld(event.x, event.y, camera.nearClip);
     var to   = camera.screenToWorld(event.x, event.y, camera.farClip);
+
+    if (this._isPointerOnExitSign(from, to)) {
+        this._exitSignClickTime = 0.25;
+        this._showExitPopup();
+        return;
+    }
 
     var dir = to.clone().sub(from).normalize();
 
