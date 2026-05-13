@@ -1,4 +1,6 @@
 pc.script.createLoadingScreen(function (app) {
+    var TOOLBAR_ID = 'bottom-toolbar';
+
     var showSplash = function () {
         var wrapper = document.createElement('div');
         wrapper.id = 'application-splash-wrapper';
@@ -73,6 +75,897 @@ pc.script.createLoadingScreen(function (app) {
             value = Math.min(1, Math.max(0, value));
             bar.style.width = value * 100 + '%';
         }
+    };
+
+    var createIconSvg = function (type) {
+        var ns = 'http://www.w3.org/2000/svg';
+        var svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('aria-hidden', 'true');
+
+        if (type === 'fixed') {
+            var p1 = document.createElementNS(ns, 'path');
+            p1.setAttribute('d', 'M12 5a7 7 0 1 0 7 7');
+            svg.appendChild(p1);
+
+            var p2 = document.createElementNS(ns, 'path');
+            p2.setAttribute('d', 'M19 5v6h-6');
+            svg.appendChild(p2);
+
+            var p3 = document.createElementNS(ns, 'path');
+            p3.setAttribute('d', 'M19 11a7 7 0 0 0-7-6');
+            svg.appendChild(p3);
+            return svg;
+        }
+
+        if (type === 'third') {
+            var rect = document.createElementNS(ns, 'rect');
+            rect.setAttribute('x', '3');
+            rect.setAttribute('y', '7');
+            rect.setAttribute('width', '18');
+            rect.setAttribute('height', '12');
+            rect.setAttribute('rx', '2');
+            rect.setAttribute('ry', '2');
+            svg.appendChild(rect);
+
+            var dot = document.createElementNS(ns, 'circle');
+            dot.setAttribute('cx', '12');
+            dot.setAttribute('cy', '13');
+            dot.setAttribute('r', '2');
+            svg.appendChild(dot);
+            return svg;
+        }
+
+        if (type === 'materials') {
+            var p = document.createElementNS(ns, 'path');
+            p.setAttribute('d', 'M12 3l8 4v10l-8 4l-8-4V7l8-4z');
+            svg.appendChild(p);
+            var l1 = document.createElementNS(ns, 'path');
+            l1.setAttribute('d', 'M12 3v18');
+            svg.appendChild(l1);
+            var l2 = document.createElementNS(ns, 'path');
+            l2.setAttribute('d', 'M4 7l8 4l8-4');
+            svg.appendChild(l2);
+            return svg;
+        }
+
+        if (type === 'eye') {
+            var e1 = document.createElementNS(ns, 'path');
+            e1.setAttribute('d', 'M2 12s4-7 10-7s10 7 10 7s-4 7-10 7S2 12 2 12z');
+            svg.appendChild(e1);
+            var e2 = document.createElementNS(ns, 'circle');
+            e2.setAttribute('cx', '12');
+            e2.setAttribute('cy', '12');
+            e2.setAttribute('r', '3');
+            svg.appendChild(e2);
+            return svg;
+        }
+
+        if (type === 'tv') {
+            var r1 = document.createElementNS(ns, 'rect');
+            r1.setAttribute('x', '4');
+            r1.setAttribute('y', '6');
+            r1.setAttribute('width', '16');
+            r1.setAttribute('height', '11');
+            r1.setAttribute('rx', '2');
+            r1.setAttribute('ry', '2');
+            svg.appendChild(r1);
+            var s1 = document.createElementNS(ns, 'path');
+            s1.setAttribute('d', 'M9 20h6');
+            svg.appendChild(s1);
+            var s2 = document.createElementNS(ns, 'path');
+            s2.setAttribute('d', 'M12 17v3');
+            svg.appendChild(s2);
+            return svg;
+        }
+
+        if (type === 'fence') {
+            var f1 = document.createElementNS(ns, 'path');
+            f1.setAttribute('d', 'M4 20V7m4 13V7m4 13V7m4 13V7m4 13V7');
+            svg.appendChild(f1);
+            var f2 = document.createElementNS(ns, 'path');
+            f2.setAttribute('d', 'M3 10h18M3 14h18');
+            svg.appendChild(f2);
+            return svg;
+        }
+
+        if (type === 'floor') {
+            var g1 = document.createElementNS(ns, 'path');
+            g1.setAttribute('d', 'M4 10l8-4l8 4l-8 4l-8-4z');
+            svg.appendChild(g1);
+            var g2 = document.createElementNS(ns, 'path');
+            g2.setAttribute('d', 'M4 14l8 4l8-4');
+            svg.appendChild(g2);
+            var g3 = document.createElementNS(ns, 'path');
+            g3.setAttribute('d', 'M12 10v8');
+            svg.appendChild(g3);
+            return svg;
+        }
+
+        if (type === 'pause') {
+            var pr = document.createElementNS(ns, 'rect');
+            pr.setAttribute('x', '6');
+            pr.setAttribute('y', '5');
+            pr.setAttribute('width', '4');
+            pr.setAttribute('height', '14');
+            pr.setAttribute('rx', '1');
+            svg.appendChild(pr);
+            var pl = document.createElementNS(ns, 'rect');
+            pl.setAttribute('x', '14');
+            pl.setAttribute('y', '5');
+            pl.setAttribute('width', '4');
+            pl.setAttribute('height', '14');
+            pl.setAttribute('rx', '1');
+            svg.appendChild(pl);
+            return svg;
+        }
+
+        var head = document.createElementNS(ns, 'path');
+        head.setAttribute('d', 'M12 12a4 4 0 1 0-4-4a4 4 0 0 0 4 4');
+        svg.appendChild(head);
+        var body = document.createElementNS(ns, 'path');
+        body.setAttribute('d', 'M4 21a8 8 0 0 1 16 0');
+        svg.appendChild(body);
+        return svg;
+    };
+
+    var initViewToolbar = function () {
+        if (document.getElementById(TOOLBAR_ID)) return;
+
+        var createToolbarButton = function (label, iconType, className, isActive) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'toolbar-btn' + (className ? (' ' + className) : '') + (isActive ? ' is-active' : '');
+            btn.setAttribute('aria-label', label);
+            btn.appendChild(createIconSvg(iconType));
+            return btn;
+        };
+
+        var createToolbarSeparator = function () {
+            var sep = document.createElement('div');
+            sep.className = 'toolbar-sep';
+            sep.setAttribute('aria-hidden', 'true');
+            return sep;
+        };
+
+        var createToolbarUi = function () {
+            var toolbar = document.createElement('div');
+            toolbar.className = 'bottom-toolbar';
+            toolbar.id = TOOLBAR_ID;
+            toolbar.setAttribute('role', 'toolbar');
+            toolbar.setAttribute('aria-label', '工具栏');
+
+            var btnThird = createToolbarButton('固定视角', 'fixed', '', true);
+            var btnFixed = createToolbarButton('第三人称视角', 'third', '');
+            var btnFirst = createToolbarButton('第一人称视角', 'first', '');
+            var btnPauseAnim = createToolbarButton('暂停动画', 'pause', 'toolbar-btn-pause-anim');
+
+            var btnScene = createToolbarButton('查看场景物品', 'materials', 'toolbar-btn-materials');
+            var btnHideTv = createToolbarButton('隐藏电视', 'tv', 'toolbar-btn-hide-tv');
+            var btnHideFence = createToolbarButton('隐藏围栏', 'fence', 'toolbar-btn-hide-fence');
+            var btnHideFloor = createToolbarButton('隐藏地板', 'floor', 'toolbar-btn-hide-floor');
+
+            toolbar.appendChild(btnThird);
+            toolbar.appendChild(btnFixed);
+            toolbar.appendChild(btnFirst);
+            toolbar.appendChild(btnPauseAnim);
+            toolbar.appendChild(createToolbarSeparator());
+            toolbar.appendChild(btnScene);
+            toolbar.appendChild(btnHideTv);
+            toolbar.appendChild(btnHideFence);
+            toolbar.appendChild(btnHideFloor);
+
+            document.body.appendChild(toolbar);
+
+            return {
+                toolbar: toolbar,
+                btnThird: btnThird,
+                btnFixed: btnFixed,
+                btnFirst: btnFirst,
+                btnPauseAnim: btnPauseAnim,
+                btnScene: btnScene,
+                btnHideTv: btnHideTv,
+                btnHideFence: btnHideFence,
+                btnHideFloor: btnHideFloor
+            };
+        };
+
+        var createScenePanelUi = function () {
+            var panel = document.createElement('div');
+            panel.id = 'materials-panel';
+            panel.setAttribute('role', 'dialog');
+            panel.setAttribute('aria-label', '场景物品');
+            panel.style.display = 'none';
+
+            var header = document.createElement('div');
+            header.className = 'materials-header';
+
+            var title = document.createElement('div');
+            title.className = 'materials-title';
+            title.innerText = '场景物品';
+
+            var search = document.createElement('input');
+            search.className = 'materials-search';
+            search.type = 'search';
+            search.placeholder = '搜索物品名称';
+            search.autocomplete = 'off';
+            search.spellcheck = false;
+
+            var list = document.createElement('div');
+            list.className = 'materials-list';
+
+            header.appendChild(title);
+            header.appendChild(search);
+            panel.appendChild(header);
+            panel.appendChild(list);
+            document.body.appendChild(panel);
+
+            return { panel: panel, search: search, list: list };
+        };
+
+        var ui = createToolbarUi();
+        var sceneUi = createScenePanelUi();
+
+        var canvas = document.getElementById('application-canvas');
+
+        var cameraEntity = app.root.findByName('Camera');
+        var playerEntity = app.root.findByName('player');
+        var orbitScript = cameraEntity && cameraEntity.script && cameraEntity.script.cameraOrbitZoom ? cameraEntity.script.cameraOrbitZoom : null;
+
+        var viewMode = 'fixed';
+        window.__robotViewMode = viewMode;
+        var isRobotPaused = false;
+        window.__robotPauseAnimation = isRobotPaused;
+        var isSceneOpen = false;
+        var isTvHidden = false;
+        var isFenceHidden = false;
+        var isFloorHidden = false;
+
+        var tmpForward = new pc.Vec3();
+        var tmpRight = new pc.Vec3();
+        var tmpCamPos = new pc.Vec3();
+        var tmpLookPos = new pc.Vec3();
+        var tmpEyePos = new pc.Vec3();
+        var tmpOffset = new pc.Vec3();
+        var tmpMoveDir = new pc.Vec3();
+
+        var findChildByNameIncludes = function (root, token) {
+            if (!root || !token) return null;
+            var stack = [root];
+            var t = token.toLowerCase();
+            while (stack.length) {
+                var e = stack.pop();
+                if (e !== root) {
+                    var n = (e.name || '').toLowerCase();
+                    if (n.indexOf(t) !== -1) return e;
+                }
+                var children = e.children;
+                for (var i = 0; i < children.length; i++) stack.push(children[i]);
+            }
+            return null;
+        };
+
+        var findEyeMount = function (root) {
+            return (
+                findChildByNameIncludes(root, 'eye') ||
+                findChildByNameIncludes(root, '眼') ||
+                findChildByNameIncludes(root, 'head') ||
+                findChildByNameIncludes(root, '头') ||
+                findChildByNameIncludes(root, 'camera') ||
+                findChildByNameIncludes(root, 'view')
+            );
+        };
+
+        var eyeMount = null;
+
+        var treeExpanded = Object.create(null);
+        var selectedPath = '';
+        var highlighted = null;
+        var tvTargets = null;
+        var fenceTargets = null;
+        var floorTargets = null;
+        var hiddenEntities = Object.create(null);
+        var hiddenMeshInstances = Object.create(null);
+        var sceneListHiddenNames = {
+            SceneRoot: true,
+            Light: true,
+            MachineEntity: true,
+            cabinetEntity1: true,
+            cabinetEntity2: true,
+            DetectionEntity: true,
+            GroundEntity: true
+        };
+
+        var findByNameLower = function (root, nameLower) {
+            if (!root) return null;
+            var stack = [root];
+            while (stack.length) {
+                var e = stack.pop();
+                var n = (e.name || '').toLowerCase();
+                if (n === nameLower) return e;
+                var children = e.children;
+                for (var i = 0; i < children.length; i++) stack.push(children[i]);
+            }
+            return null;
+        };
+
+        var getSceneRoot = function () {
+            var sr = app.root.findByName('SceneRoot');
+            if (sr) return sr;
+            sr = findByNameLower(app.root, 'sceneroot');
+            if (sr) return sr;
+            return app.root;
+        };
+
+        var resolveEntityByPath = function (root, path) {
+            if (!root || !path) return null;
+            var parts = path.split('.');
+            var node = root;
+            for (var i = 1; i < parts.length; i++) {
+                var idx = parseInt(parts[i], 10);
+                if (!node || !node.children || idx !== idx) return null;
+                if (idx < 0 || idx >= node.children.length) return null;
+                node = node.children[idx];
+            }
+            return node;
+        };
+
+        var getEntityId = function (e) {
+            if (!e) return '';
+            if (e.getGuid) return e.getGuid();
+            if (e._guid) return e._guid;
+            return e.name || '';
+        };
+
+        var getMeshInstanceId = function (mi) {
+            if (!mi) return '';
+            if (mi.id !== undefined) return String(mi.id);
+            if (mi._id !== undefined) return String(mi._id);
+            var n = mi.node && mi.node.name ? mi.node.name : '';
+            var m = mi.mesh && mi.mesh.name ? mi.mesh.name : '';
+            return n + '|' + m;
+        };
+
+        var addHiddenEntity = function (e) {
+            var id = getEntityId(e);
+            if (!id) return;
+            var rec = hiddenEntities[id];
+            if (!rec) {
+                rec = { count: 0, enabled: e.enabled, entity: e };
+                hiddenEntities[id] = rec;
+            }
+            rec.entity = e;
+            rec.count++;
+            e.enabled = false;
+        };
+
+        var removeHiddenEntity = function (e) {
+            var id = getEntityId(e);
+            if (!id) return;
+            var rec = hiddenEntities[id];
+            if (!rec) return;
+            rec.count--;
+            if (rec.count <= 0) {
+                if (rec.entity) rec.entity.enabled = rec.enabled;
+                delete hiddenEntities[id];
+            }
+        };
+
+        var addHiddenMeshInstance = function (mi) {
+            var id = getMeshInstanceId(mi);
+            if (!id) return;
+            var rec = hiddenMeshInstances[id];
+            if (!rec) {
+                rec = { count: 0, visible: mi.visible, mi: mi };
+                hiddenMeshInstances[id] = rec;
+            }
+            rec.mi = mi;
+            rec.count++;
+            mi.visible = false;
+        };
+
+        var removeHiddenMeshInstance = function (mi) {
+            var id = getMeshInstanceId(mi);
+            if (!id) return;
+            var rec = hiddenMeshInstances[id];
+            if (!rec) return;
+            rec.count--;
+            if (rec.count <= 0) {
+                if (rec.mi) rec.mi.visible = rec.visible;
+                delete hiddenMeshInstances[id];
+            }
+        };
+
+        var collectTargetsByNames = function (names) {
+            var set = Object.create(null);
+            for (var i = 0; i < names.length; i++) set[names[i]] = true;
+            var entities = [];
+            var meshInstances = [];
+            app.root.forEach(function (node) {
+                if (set[node.name]) entities.push(node);
+
+                var mis = null;
+                if (node.render && node.render.meshInstances) mis = node.render.meshInstances;
+                else if (node.model && node.model.meshInstances) mis = node.model.meshInstances;
+                if (!mis || !mis.length) return;
+
+                for (var j = 0; j < mis.length; j++) {
+                    var mi = mis[j];
+                    var n1 = mi && mi.node && mi.node.name ? mi.node.name : '';
+                    var n2 = mi && mi.mesh && mi.mesh.name ? mi.mesh.name : '';
+                    if (set[n1] || set[n2]) meshInstances.push(mi);
+                }
+            });
+            return { entities: entities, meshInstances: meshInstances };
+        };
+
+        var hideTargets = function (targets) {
+            if (!targets) return;
+            var es = targets.entities || [];
+            for (var i = 0; i < es.length; i++) addHiddenEntity(es[i]);
+            var ms = targets.meshInstances || [];
+            for (var j = 0; j < ms.length; j++) addHiddenMeshInstance(ms[j]);
+        };
+
+        var showTargets = function (targets) {
+            if (!targets) return;
+            var es = targets.entities || [];
+            for (var i = 0; i < es.length; i++) removeHiddenEntity(es[i]);
+            var ms = targets.meshInstances || [];
+            for (var j = 0; j < ms.length; j++) removeHiddenMeshInstance(ms[j]);
+        };
+
+        var clearHighlight = function () {
+            if (!highlighted || !highlighted.items) return;
+            for (var i = 0; i < highlighted.items.length; i++) {
+                var it = highlighted.items[i];
+                if (!it || !it.meshInstance) continue;
+                it.meshInstance.material = it.material;
+            }
+            highlighted = null;
+        };
+
+        var applyHighlight = function (entity) {
+            clearHighlight();
+            if (!entity) return;
+            var items = [];
+
+            entity.forEach(function (node) {
+                var meshInstances = null;
+                if (node.render && node.render.meshInstances) meshInstances = node.render.meshInstances;
+                else if (node.model && node.model.meshInstances) meshInstances = node.model.meshInstances;
+                if (!meshInstances || !meshInstances.length) return;
+
+                for (var i = 0; i < meshInstances.length; i++) {
+                    var mi = meshInstances[i];
+                    if (!mi || !mi.material || !mi.material.clone) continue;
+
+                    items.push({ meshInstance: mi, material: mi.material });
+
+                    var cloned = mi.material.clone();
+                    if (cloned.emissive && cloned.emissive.set) cloned.emissive.set(0, 0.6, 1);
+                    if (cloned.emissiveIntensity !== undefined) cloned.emissiveIntensity = 1.8;
+                    if (cloned.update) cloned.update();
+                    mi.material = cloned;
+                }
+            });
+
+            highlighted = { items: items };
+        };
+
+        var isSceneListHiddenNode = function (node) {
+            if (!node) return false;
+            return !!sceneListHiddenNames[node.name || ''];
+        };
+
+        var shouldShowNode = function (node, q, path) {
+            if (!node) return false;
+            if (isSceneListHiddenNode(node) && path !== '0') return false;
+
+            if (!q) return true;
+            var name = (node.name || '').toLowerCase();
+            if (name.indexOf(q) !== -1) return true;
+            var children = node.children;
+            for (var i = 0; i < children.length; i++) {
+                if (shouldShowNode(children[i], q, path + '.' + i)) return true;
+            }
+            return false;
+        };
+
+        var renderSceneTree = function () {
+            var q = (sceneUi.search.value || '').trim().toLowerCase();
+            var root = getSceneRoot();
+
+            sceneUi.list.textContent = '';
+
+            if (!root) {
+                var empty0 = document.createElement('div');
+                empty0.className = 'materials-empty';
+                empty0.innerText = '未找到 SceneRoot';
+                sceneUi.list.appendChild(empty0);
+                return;
+            }
+
+            var any = false;
+
+            var renderNode = function (node, depth, path) {
+                if (!shouldShowNode(node, q, path)) return;
+
+                var hiddenByName = isSceneListHiddenNode(node);
+                var children = node.children || [];
+
+                if (hiddenByName && path === '0') {
+                    for (var rootChildIdx = 0; rootChildIdx < children.length; rootChildIdx++) {
+                        renderNode(children[rootChildIdx], depth, path + '.' + rootChildIdx);
+                    }
+                    return;
+                }
+
+                any = true;
+                var hasChildren = children.length > 0;
+
+                var matched = !q || ((node.name || '').toLowerCase().indexOf(q) !== -1);
+                var expanded = path === '0' || (!!treeExpanded[path]) || (!!q && hasChildren && shouldShowNode(node, q, path));
+
+                var row = document.createElement('div');
+                row.className = 'scene-row' + (selectedPath === path ? ' is-selected' : '');
+                row.dataset.path = path;
+                row.dataset.hasChildren = hasChildren ? '1' : '0';
+                row.dataset.depth = String(depth);
+                row.dataset.expanded = expanded ? '1' : '0';
+                row.style.paddingLeft = (10 + depth * 14) + 'px';
+
+                var toggle = document.createElement('div');
+                toggle.className = 'scene-toggle' + (hasChildren ? '' : ' is-leaf') + (expanded ? ' is-open' : '');
+                row.appendChild(toggle);
+
+                var nameEl = document.createElement('div');
+                nameEl.className = 'scene-name' + (matched && q ? ' is-match' : '');
+                nameEl.innerText = node.name || '(未命名)';
+                row.appendChild(nameEl);
+
+                if (path !== '0' && hasChildren) {
+                    var eyeBtn = document.createElement('button');
+                    eyeBtn.type = 'button';
+                    eyeBtn.className = 'scene-eye';
+                    eyeBtn.setAttribute('aria-label', '高亮选中');
+                    eyeBtn.dataset.path = path;
+                    eyeBtn.appendChild(createIconSvg('eye'));
+                    row.appendChild(eyeBtn);
+                }
+
+                sceneUi.list.appendChild(row);
+
+                if (!hasChildren) return;
+                if (!expanded) return;
+
+                for (var i = 0; i < children.length; i++) {
+                    renderNode(children[i], depth + 1, path + '.' + i);
+                }
+            };
+
+            renderNode(root, 0, '0');
+
+            if (!any) {
+                var empty = document.createElement('div');
+                empty.className = 'materials-empty';
+                empty.innerText = '无匹配物品';
+                sceneUi.list.appendChild(empty);
+            }
+        };
+
+        var setSceneOpen = function (open) {
+            if (open === isSceneOpen) return;
+            isSceneOpen = open;
+            if (isSceneOpen) {
+                ui.btnScene.classList.add('is-active');
+                sceneUi.panel.style.display = '';
+                renderSceneTree();
+                sceneUi.search.focus();
+                sceneUi.search.select();
+            } else {
+                ui.btnScene.classList.remove('is-active');
+                sceneUi.panel.style.display = 'none';
+            }
+        };
+
+        sceneUi.search.addEventListener('input', function () {
+            if (!isSceneOpen) return;
+            renderSceneTree();
+        });
+
+        sceneUi.list.addEventListener('click', function (ev) {
+            var t = ev.target;
+            var eye = null;
+            while (t && t !== sceneUi.list) {
+                if (t.classList && t.classList.contains('scene-eye')) {
+                    eye = t;
+                    break;
+                }
+                t = t.parentElement;
+            }
+
+            if (eye) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                var p = eye.dataset.path;
+                if (!p) return;
+                if (selectedPath === p) {
+                    selectedPath = '';
+                    clearHighlight();
+                } else {
+                    selectedPath = p;
+                    applyHighlight(resolveEntityByPath(getSceneRoot(), p));
+                }
+                renderSceneTree();
+                return;
+            }
+
+            var el = ev.target;
+            while (el && el !== sceneUi.list && !(el.classList && el.classList.contains('scene-row'))) el = el.parentElement;
+            if (!el || el === sceneUi.list) return;
+
+            var path = el.dataset.path;
+            var hasChildren = el.dataset.hasChildren === '1';
+            var q = (sceneUi.search.value || '').trim();
+
+            if (!hasChildren && path) {
+                selectedPath = path;
+                applyHighlight(resolveEntityByPath(getSceneRoot(), path));
+                renderSceneTree();
+                return;
+            }
+
+            if (!q && hasChildren && path && path !== '0') {
+                treeExpanded[path] = !treeExpanded[path];
+                renderSceneTree();
+            }
+        });
+
+        var syncViewButtons = function () {
+            if (viewMode === 'first') {
+                ui.btnFirst.classList.add('is-active');
+                ui.btnThird.classList.remove('is-active');
+                ui.btnFixed.classList.remove('is-active');
+            } else if (viewMode === 'third') {
+                ui.btnFixed.classList.add('is-active');
+                ui.btnThird.classList.remove('is-active');
+                ui.btnFirst.classList.remove('is-active');
+            } else {
+                ui.btnThird.classList.add('is-active');
+                ui.btnFirst.classList.remove('is-active');
+                ui.btnFixed.classList.remove('is-active');
+            }
+        };
+
+        var syncPauseButton = function () {
+            if (isRobotPaused) ui.btnPauseAnim.classList.add('is-active');
+            else ui.btnPauseAnim.classList.remove('is-active');
+        };
+
+        var exitPointerLock = function () {
+            if (document.pointerLockElement) {
+                document.exitPointerLock();
+            }
+        };
+
+        var ensureCameraAndPlayer = function () {
+            if (!cameraEntity) {
+                cameraEntity = app.root.findByName('Camera');
+                orbitScript = cameraEntity && cameraEntity.script && cameraEntity.script.cameraOrbitZoom ? cameraEntity.script.cameraOrbitZoom : null;
+                if (orbitScript) orbitScript.enabled = false;
+            }
+            if (!playerEntity) playerEntity = app.root.findByName('player');
+            if (!cameraEntity || !playerEntity) return false;
+            return true;
+        };
+
+        var getRobotPathMove = function () {
+            if (!ensureCameraAndPlayer()) return null;
+            return playerEntity.script && playerEntity.script.robotPathMove ? playerEntity.script.robotPathMove : null;
+        };
+
+        var getFacingForwardXZ = function () {
+            var robotPathMove = playerEntity.script && playerEntity.script.robotPathMove ? playerEntity.script.robotPathMove : null;
+            var facingEntity = robotPathMove && robotPathMove.animEntity ? robotPathMove.animEntity : playerEntity;
+
+            var lookDir = null;
+            if (robotPathMove && robotPathMove._lookDir && robotPathMove._lookDir.lengthSq && robotPathMove._lookDir.lengthSq() > 1e-6) {
+                lookDir = robotPathMove._lookDir;
+            } else {
+                lookDir = facingEntity.forward;
+            }
+
+            tmpForward.set(lookDir.x, 0, lookDir.z);
+            if (tmpForward.lengthSq() < 1e-6) {
+                var fallbackForward = playerEntity.forward;
+                tmpForward.set(fallbackForward.x, 0, fallbackForward.z);
+            }
+            tmpForward.normalize();
+            return facingEntity;
+        };
+
+        var updateThirdCamera = function (p) {
+            tmpRight.cross(pc.Vec3.UP, tmpForward).normalize();
+
+            var followBack = 6.75;    // 相机离角色的后向距离（越大越远）
+            var followUp = 4.4;       // 相机高度（越大越高）
+            var followRight = 0.55;   // 相机向右的偏移（越大越靠右）
+            var lookAhead = 38.0;     // 视线朝前看的距离（越大越看向远处）
+            var lookUp = -3.2;         // 视线目标高度（越小越向下看，越大越仰视）
+
+            tmpCamPos.set(
+                p.x - tmpForward.x * followBack + tmpRight.x * followRight,
+                p.y + followUp,
+                p.z - tmpForward.z * followBack + tmpRight.z * followRight
+            );
+
+            tmpLookPos.set(
+                p.x + tmpForward.x * lookAhead,
+                p.y + lookUp,
+                p.z + tmpForward.z * lookAhead
+            );
+
+            cameraEntity.setPosition(tmpCamPos);
+            cameraEntity.lookAt(tmpLookPos);
+        };
+
+        var updateFirstCamera = function (p, facingEntity) {
+            // 1.75  2.2 增加相机高度
+            tmpEyePos.set(p.x, p.y + 2.2, p.z);
+
+            var firstCameraBackEnabled = true;
+            var firstCameraFollowBack = -0.2//1.2;
+            var firstCameraForwardOffset = 0.25;
+
+            tmpOffset.copy(tmpForward).scale(firstCameraForwardOffset);
+            tmpCamPos.copy(tmpEyePos).add(tmpOffset);
+
+            if (firstCameraBackEnabled) {
+                var robotPathMove = playerEntity.script && playerEntity.script.robotPathMove ? playerEntity.script.robotPathMove : null;
+                if (robotPathMove && robotPathMove._moveDir && robotPathMove._moveDir.lengthSq && robotPathMove._moveDir.lengthSq() > 1e-6) {
+                    tmpMoveDir.set(robotPathMove._moveDir.x, 0, robotPathMove._moveDir.z).normalize();
+                } else {
+                    tmpMoveDir.copy(tmpForward);
+                }
+
+                tmpOffset.copy(tmpMoveDir).scale(-firstCameraFollowBack);
+                tmpCamPos.add(tmpOffset);
+            }
+
+            tmpOffset.copy(tmpForward).scale(20.0);
+            tmpLookPos.copy(tmpCamPos).add(tmpOffset);
+            // 0.6  -1.2 增加相机与地板的角度。值越小角度越大
+            tmpLookPos.y += -1.2;
+
+            cameraEntity.setPosition(tmpCamPos);
+            cameraEntity.lookAt(tmpLookPos);
+        };
+
+        var onUpdate = function () {
+            if (viewMode !== 'third' && viewMode !== 'first') return;
+            if (!ensureCameraAndPlayer()) return;
+
+            var p = playerEntity.getPosition();
+            var facingEntity = getFacingForwardXZ();
+
+            if (viewMode === 'third') {
+                updateThirdCamera(p);
+                return;
+            }
+
+            updateFirstCamera(p, facingEntity);
+        };
+
+        var setViewMode = function (mode) {
+            if (mode === viewMode) return;
+            viewMode = mode;
+            window.__robotViewMode = viewMode;
+
+            if (viewMode !== 'first') exitPointerLock();
+            if (orbitScript) orbitScript.enabled = (viewMode === 'fixed');
+
+            syncViewButtons();
+        };
+
+        var swallow = function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+        };
+
+        var hookButton = function (btn, onClick) {
+            btn.addEventListener('pointerdown', swallow, { passive: false });
+            btn.addEventListener('click', onClick);
+        };
+
+        var tvNames = [
+            'Mesh_368', 'Mesh_369', 'Mesh_370', 'Mesh_371', 'Mesh_372', 'Mesh_373', 'Mesh_374', 'Mesh_375', 'Mesh_376',
+            'Mesh_377', 'Mesh_378', 'Mesh_379', 'Mesh_380', 'Mesh_381', '屏幕'
+        ];
+        var tvDefaultHiddenInFixedApplied = false;
+
+        var applyTvHidden = function (hidden) {
+            if (hidden === isTvHidden) return;
+            isTvHidden = hidden;
+            if (isTvHidden) {
+                ui.btnHideTv.classList.add('is-active');
+                tvTargets = collectTargetsByNames(tvNames);
+                hideTargets(tvTargets);
+            } else {
+                ui.btnHideTv.classList.remove('is-active');
+                showTargets(tvTargets);
+                tvTargets = null;
+            }
+        };
+
+        hookButton(ui.btnThird, function () { setViewMode('fixed'); });
+        hookButton(ui.btnFixed, function () {
+            setViewMode('third');
+            if (!tvDefaultHiddenInFixedApplied) {
+                tvDefaultHiddenInFixedApplied = true;
+                applyTvHidden(true);
+            }
+        });
+        hookButton(ui.btnFirst, function () { setViewMode('first'); });
+        hookButton(ui.btnPauseAnim, function () {
+            isRobotPaused = !isRobotPaused;
+            window.__robotPauseAnimation = isRobotPaused;
+
+            var robotPathMove = getRobotPathMove();
+            if (isRobotPaused && robotPathMove && robotPathMove.setPlayerStatus) {
+                robotPathMove.setPlayerStatus(2);
+            }
+
+            syncPauseButton();
+        });
+        hookButton(ui.btnScene, function () { setSceneOpen(!isSceneOpen); });
+        hookButton(ui.btnHideTv, function () {
+            applyTvHidden(!isTvHidden);
+        });
+        hookButton(ui.btnHideFence, function () {
+            var fenceNames = [
+                'Mesh_106', 'Mesh_77', 'Mesh_55', 'Mesh_63', 'Mesh_155', 'Mesh_60', 'Mesh_110', 'Mesh_145', 'Mesh_156', 'Mesh_153', 'Mesh_154',
+                'Mesh_75', 'Mesh_80', 'Mesh_85', 'Mesh_90', 'Mesh_96', 'Mesh_101', 'Mesh_103', 'Mesh_113',
+                'Mesh_48', 'Mesh_53', 'Mesh_58', 'Mesh_62', 'Mesh_64', 'Mesh_66', 'Mesh_68', 'Mesh_69', 'Mesh_71', 'Mesh_72', 'Mesh_76', 'Mesh_78',
+                'Mesh_88', 'Mesh_91', 'Mesh_93', 'Mesh_98', 'Mesh_100', 'Mesh_105', 'Mesh_107', 'Mesh_109', 'Mesh_111', 'Mesh_115', 'Mesh_119',
+                'Mesh_44', 'Mesh_59', 'Mesh_81', 'Mesh_83', 'Mesh_86', 'Mesh_95',
+                'Mesh_40', 'Mesh_49', 'Mesh_54', 'Mesh_57', 'Mesh_62', 'Mesh_67', 'Mesh_73'
+            ];
+            isFenceHidden = !isFenceHidden;
+            if (isFenceHidden) {
+                ui.btnHideFence.classList.add('is-active');
+                fenceTargets = collectTargetsByNames(fenceNames);
+                hideTargets(fenceTargets);
+            } else {
+                ui.btnHideFence.classList.remove('is-active');
+                showTargets(fenceTargets);
+                fenceTargets = null;
+            }
+        });
+
+        hookButton(ui.btnHideFloor, function () {
+            var floorNames = ['Mesh_383'];
+            isFloorHidden = !isFloorHidden;
+            if (isFloorHidden) {
+                ui.btnHideFloor.classList.add('is-active');
+                floorTargets = collectTargetsByNames(floorNames);
+                hideTargets(floorTargets);
+            } else {
+                ui.btnHideFloor.classList.remove('is-active');
+                showTargets(floorTargets);
+                floorTargets = null;
+            }
+        });
+
+        if (viewMode === 'third' && !tvDefaultHiddenInFixedApplied) {
+            tvDefaultHiddenInFixedApplied = true;
+            applyTvHidden(true);
+        }
+
+        syncPauseButton();
+
+        app.on('update', onUpdate);
+
     };
 
     var createCss = function () {
@@ -246,6 +1139,275 @@ pc.script.createLoadingScreen(function (app) {
             '.gearInner .bar:nth-child(5) { transform: rotate(30deg); }',
             '.gearInner .bar:nth-child(6) { transform: rotate(150deg); }',
             '',
+            '.bottom-toolbar {',
+            '    position: fixed;',
+            '    left: 50%;',
+            '    bottom: 12px;',
+            '    transform: translateX(-50%);',
+            '    display: flex;',
+            '    gap: 10px;',
+            '    padding: 10px 12px;',
+            '    border-radius: 14px;',
+            '    background: rgba(16, 18, 20, 0.72);',
+            '    border: 1px solid rgba(255, 255, 255, 0.12);',
+            '    backdrop-filter: blur(10px);',
+            '    -webkit-backdrop-filter: blur(10px);',
+            '    z-index: 10001;',
+            '    pointer-events: auto;',
+            '    user-select: none;',
+            '}',
+            '',
+            '@supports (bottom: env(safe-area-inset-bottom)) {',
+            '    .bottom-toolbar {',
+            '        bottom: calc(12px + env(safe-area-inset-bottom));',
+            '    }',
+            '}',
+            '',
+            '.bottom-toolbar .toolbar-btn {',
+            '    width: 44px;',
+            '    height: 44px;',
+            '    border-radius: 12px;',
+            '    border: 1px solid rgba(255, 255, 255, 0.12);',
+            '    background: rgba(255, 255, 255, 0.06);',
+            '    display: inline-flex;',
+            '    align-items: center;',
+            '    justify-content: center;',
+            '    cursor: pointer;',
+            '    padding: 0;',
+            '    outline: none;',
+            '    position: relative;',
+            '}',
+            '',
+            '.bottom-toolbar .toolbar-btn:hover::after {',
+            '    content: attr(aria-label);',
+            '    position: absolute;',
+            '    left: 50%;',
+            '    bottom: 52px;',
+            '    transform: translateX(-50%);',
+            '    padding: 6px 8px;',
+            '    border-radius: 10px;',
+            '    background: rgba(16, 18, 20, 0.92);',
+            '    border: 1px solid rgba(255, 255, 255, 0.14);',
+            '    color: rgba(255, 255, 255, 0.92);',
+            '    font-size: 12px;',
+            '    line-height: 1;',
+            '    white-space: nowrap;',
+            '    pointer-events: none;',
+            '    z-index: 10003;',
+            '}',
+            '',
+            '.bottom-toolbar .toolbar-btn:hover::before {',
+            '    content: "";',
+            '    position: absolute;',
+            '    left: 50%;',
+            '    bottom: 44px;',
+            '    transform: translateX(-50%);',
+            '    width: 0;',
+            '    height: 0;',
+            '    border-style: solid;',
+            '    border-width: 6px 6px 0 6px;',
+            '    border-color: rgba(16, 18, 20, 0.92) transparent transparent transparent;',
+            '    pointer-events: none;',
+            '    z-index: 10003;',
+            '}',
+            '',
+            '.bottom-toolbar .toolbar-btn svg {',
+            '    width: 22px;',
+            '    height: 22px;',
+            '    fill: none;',
+            '    stroke: rgba(255, 255, 255, 0.92);',
+            '    stroke-width: 1.8;',
+            '    stroke-linecap: round;',
+            '    stroke-linejoin: round;',
+            '}',
+            '',
+            '.bottom-toolbar .toolbar-btn.is-active {',
+            '    background: rgba(0, 153, 255, 0.18);',
+            '    border-color: rgba(0, 153, 255, 0.55);',
+            '}',
+            '',
+            '.bottom-toolbar .toolbar-btn:active {',
+            '    transform: translateY(1px);',
+            '}',
+            '',
+            '.bottom-toolbar .toolbar-sep {',
+            '    width: 1px;',
+            '    height: 26px;',
+            '    background: rgba(255, 255, 255, 0.18);',
+            '    align-self: center;',
+            '    margin: 0 2px;',
+            '    pointer-events: none;',
+            '}',
+            '',
+            '#materials-panel {',
+            '    position: fixed;',
+            '    top: 12px;',
+            '    right: 12px;',
+            '    width: 320px;',
+            '    max-width: calc(100vw - 24px);',
+            '    max-height: calc(100vh - 24px);',
+            '    display: flex;',
+            '    flex-direction: column;',
+            '    border-radius: 14px;',
+            '    background: rgba(16, 18, 20, 0.92);',
+            '    border: 1px solid rgba(255, 255, 255, 0.14);',
+            '    backdrop-filter: blur(10px);',
+            '    -webkit-backdrop-filter: blur(10px);',
+            '    z-index: 10002;',
+            '    overflow: hidden;',
+            '}',
+            '',
+            '#materials-panel .materials-header {',
+            '    display: flex;',
+            '    flex-direction: column;',
+            '    gap: 8px;',
+            '    padding: 12px 12px 10px 12px;',
+            '    border-bottom: 1px solid rgba(255, 255, 255, 0.10);',
+            '}',
+            '',
+            '#materials-panel .materials-title {',
+            '    color: rgba(255, 255, 255, 0.92);',
+            '    font-size: 13px;',
+            '    font-weight: 600;',
+            '    letter-spacing: 0.2px;',
+            '}',
+            '',
+            '#materials-panel .materials-search {',
+            '    width: 100%;',
+            '    height: 34px;',
+            '    border-radius: 10px;',
+            '    border: 1px solid rgba(255, 255, 255, 0.12);',
+            '    background: rgba(255, 255, 255, 0.06);',
+            '    color: rgba(255, 255, 255, 0.92);',
+            '    padding: 0 10px;',
+            '    outline: none;',
+            '    box-sizing: border-box;',
+            '}',
+            '',
+            '#materials-panel .materials-search::placeholder {',
+            '    color: rgba(255, 255, 255, 0.45);',
+            '}',
+            '',
+            '#materials-panel .materials-list {',
+            '    padding: 8px 8px 10px 8px;',
+            '    overflow: auto;',
+            '    flex: 1;',
+            '}',
+            '',
+            '#materials-panel .scene-row {',
+            '    display: flex;',
+            '    align-items: center;',
+            '    gap: 8px;',
+            '    padding-top: 8px;',
+            '    padding-bottom: 8px;',
+            '    border-radius: 10px;',
+            '    border: 1px solid rgba(255, 255, 255, 0.08);',
+            '    background: rgba(255, 255, 255, 0.03);',
+            '    margin: 0 0 8px 0;',
+            '    cursor: pointer;',
+            '    user-select: none;',
+            '}',
+            '',
+            '#materials-panel .scene-row:hover {',
+            '    background: rgba(255, 255, 255, 0.05);',
+            '}',
+            '',
+            '#materials-panel .scene-row.is-selected {',
+            '    background: rgba(0, 153, 255, 0.16);',
+            '    border-color: rgba(0, 153, 255, 0.38);',
+            '}',
+            '',
+            '#materials-panel .scene-toggle {',
+            '    width: 12px;',
+            '    height: 12px;',
+            '    flex: 0 0 12px;',
+            '    position: relative;',
+            '}',
+            '',
+            '#materials-panel .scene-toggle:before {',
+            '    content: "";',
+            '    position: absolute;',
+            '    top: 1px;',
+            '    left: 3px;',
+            '    width: 0;',
+            '    height: 0;',
+            '    border-style: solid;',
+            '    border-width: 5px 0 5px 6px;',
+            '    border-color: transparent transparent transparent rgba(255, 255, 255, 0.70);',
+            '    transform-origin: 2px 5px;',
+            '}',
+            '',
+            '#materials-panel .scene-toggle.is-open:before {',
+            '    transform: rotate(90deg);',
+            '}',
+            '',
+            '#materials-panel .scene-toggle.is-leaf:before {',
+            '    border-width: 0;',
+            '}',
+            '',
+            '#materials-panel .scene-name {',
+            '    color: rgba(255, 255, 255, 0.92);',
+            '    font-size: 13px;',
+            '    line-height: 1.2;',
+            '    word-break: break-word;',
+            '    flex: 1;',
+            '}',
+            '',
+            '#materials-panel .scene-name.is-match {',
+            '    color: rgba(0, 153, 255, 0.95);',
+            '}',
+            '',
+            '#materials-panel .scene-eye {',
+            '    margin-left: auto;',
+            '    width: 28px;',
+            '    height: 28px;',
+            '    border-radius: 10px;',
+            '    border: 1px solid rgba(255, 255, 255, 0.12);',
+            '    background: rgba(255, 255, 255, 0.05);',
+            '    display: inline-flex;',
+            '    align-items: center;',
+            '    justify-content: center;',
+            '    padding: 0;',
+            '    cursor: pointer;',
+            '}',
+            '',
+            '#materials-panel .scene-eye svg {',
+            '    width: 18px;',
+            '    height: 18px;',
+            '    fill: none;',
+            '    stroke: rgba(255, 255, 255, 0.80);',
+            '    stroke-width: 1.8;',
+            '    stroke-linecap: round;',
+            '    stroke-linejoin: round;',
+            '}',
+            '',
+            '#materials-panel .materials-row {',
+            '    padding: 10px 10px;',
+            '    border-radius: 12px;',
+            '    border: 1px solid rgba(255, 255, 255, 0.08);',
+            '    background: rgba(255, 255, 255, 0.03);',
+            '    margin: 0 0 8px 0;',
+            '}',
+            '',
+            '#materials-panel .materials-name {',
+            '    color: rgba(255, 255, 255, 0.92);',
+            '    font-size: 13px;',
+            '    line-height: 1.2;',
+            '    word-break: break-word;',
+            '}',
+            '',
+            '#materials-panel .materials-meta {',
+            '    color: rgba(255, 255, 255, 0.55);',
+            '    font-size: 12px;',
+            '    margin-top: 4px;',
+            '}',
+            '',
+            '#materials-panel .materials-empty {',
+            '    color: rgba(255, 255, 255, 0.55);',
+            '    font-size: 12px;',
+            '    padding: 12px 10px;',
+            '}',
+            '',
             '#progress-bar-container {',
             '    margin: 32px auto 0 auto;',
             '    height: 4px;',
@@ -281,5 +1443,8 @@ pc.script.createLoadingScreen(function (app) {
         app.off('preload:progress');
     });
     app.on('preload:progress', setProgress);
-    app.on('start', hideSplash);
+    app.on('start', function () {
+        hideSplash();
+        initViewToolbar();
+    });
 });

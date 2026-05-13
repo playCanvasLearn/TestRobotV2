@@ -1,3 +1,4 @@
+
 // 创建 PlayCanvas 脚本：机器人沿路径移动
 var RobotPathMove = pc.createScript('robotPathMove');
 
@@ -67,6 +68,8 @@ RobotPathMove.prototype.initialize = function () {
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'openDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'take', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'putItem', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'closeDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '去检测', turn: '', position: { x: 0.6, y: 0, z: -6.4 }, lookAt: { x: 0.6, y: 0, z: -6.5 } },
         { showMessage: '检测中', turn: '', position: { x: 0.4, y: 0, z: -6.5 }, lookAt: { x: -2, y: 0, z: -6.5 } },
@@ -77,6 +80,8 @@ RobotPathMove.prototype.initialize = function () {
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'openDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'take', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'putItem', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'closeDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '去检测', turn: '', position: { x: 0.4, y: 0, z: -6.4 }, lookAt: { x: 0.4, y: 0, z: -6.5 } },
         { showMessage: '检测中', turn: '', position: { x: 0.4, y: 0, z: -6.5 }, lookAt: { x: -2, y: 0, z: -6.5 } },
@@ -130,7 +135,7 @@ RobotPathMove.prototype.initialize = function () {
     this._pickupItem = null;
     this._heldItem = null;
     this._takeActionDone = !1;
-    this._activeTakeNode = -1;
+    this._activeActionKey = '';
     this._pickupGlowShell = null;
     this._pickupGlowMaterial = null;
     this._pickupGlowTime = 0;
@@ -292,6 +297,7 @@ RobotPathMove.prototype.update = function (dt) {
         this._chartTexture.upload();
     }
 
+    // 每帧先刷新抓取挂点的世界姿态，再让当前手持物体同步到该挂点，保证抓取跟随稳定。
     this._updateGrabSocketPose();
     this._syncHeldItemPose();
     this._updatePickupSelectionFx(dt);
@@ -315,6 +321,8 @@ RobotPathMove.prototype.update = function (dt) {
 
     var pos = this.entity.getLocalPosition();
 
+    // 连续的空动作节点如果与当前位置重合，且下一节点只是同一配置的重复点，则直接跳过，
+    // 避免机器人在导出的冗余路径点上停顿或重复刷新同一状态。
     while (node && node.turn === '' && this._index + 1 < this.path.length) {
         var samePoint = Math.abs(target.x - pos.x) <= this.arriveDistance &&
             Math.abs(target.z - pos.z) <= this.arriveDistance;
@@ -361,34 +369,30 @@ RobotPathMove.prototype.update = function (dt) {
         this._targetLookMarker.setLocalPosition(look.x, look.y, look.z);
     }
 
+    // 特殊节点优先于普通移动处理：它们通过 turn 字段驱动停留、抓取、开关门等状态机。
     // ===== pause 节点：walk → idle（纯停留）=====
     if (node.turn === 'pause') {
         this._currentSpeed = 0;
-        // 第一次进入 pause
-        if (this._pauseTimer === 0) {
+        if (this._beginSpecialAction(node)) {
             this.setPlayerStatus(2); // walk → idle
         }
 
-        this._pauseTimer += dt;
+        this._advanceSpecialAction(dt);
         this.updateLookAt(node, dt);
 
         if (this._pauseTimer >= this.pauseTime) {
-            this._pauseTimer = 0;
-            this._index++;
+            this._finishSpecialAction();
         }
         return;
     }
     // ===== take 节点：idle → take =====
     if (node.turn === 'take') {
         this._currentSpeed = 0;
-        // 第一次进入 take
-        if (this._pauseTimer === 0) {
+        if (this._beginSpecialAction(node)) {
             this.setPlayerStatus(3); // idle → take
-            this._activeTakeNode = this._index;
-            this._takeActionDone = !1;
         }
 
-        this._pauseTimer += dt;
+        this._advanceSpecialAction(dt);
         this.updateLookAt(node, dt);
 
         // 在 take 动作即将完成前再移动物品，避免一进入 take 就直接吸到手上。
@@ -396,14 +400,13 @@ RobotPathMove.prototype.update = function (dt) {
         var takeMoveLeadTime = 0.2;
         var takeActionTriggerTime = Math.max(0.05, this.pauseTime - takeMoveLeadTime);
 
-        if (!this._takeActionDone && this._activeTakeNode === this._index && this._pauseTimer >= takeActionTriggerTime) {
+        if (!this._takeActionDone && this._pauseTimer >= takeActionTriggerTime) {
             this._handleTakeAction(node);
             this._takeActionDone = !0;
         }
 
         if (this._pauseTimer >= this.pauseTime) {
-            this._pauseTimer = 0;
-            this._index++;
+            this._finishSpecialAction();
         }
         return;
     }
@@ -411,15 +414,26 @@ RobotPathMove.prototype.update = function (dt) {
     if (node.turn === 'putItem') {
         this._currentSpeed = 0;
         this.updateLookAt(node, dt);
-        this._startPutItemAction();
-        this._index++;
+
+        if (this._beginSpecialAction(node)) {
+            this._startPutItemAction();
+        }
+
+        this._finishSpecialAction();
         return;
     }
     // ===== openDoor 节点：触发开门 =====
     if (node.turn === 'openDoor') {
         this._currentSpeed = 0;
-        this._doorDir = 1; // 开始开门
-        this._index++;     // 立即进入下一节点，不阻塞
+        this.setPlayerStatus(2);
+        this.updateLookAt(node, dt);
+
+        if (this._doorProgress >= 1 && this._doorDir === 0) {
+            this._index++;
+            return;
+        }
+
+        this._doorDir = 1; // 开始开门，并等待门动画完成
         return;
     }
     // ===== closeDoor 节点：触发关门 =====
@@ -446,14 +460,14 @@ RobotPathMove.prototype.update = function (dt) {
             this._currentSpeed = 0;
         }
 
-        // 精确贴点
+        // 到点后先精确贴到目标坐标，避免因为 dt 或浮点误差导致越走越偏。
         this.entity.setLocalPosition(
             target.x,
             target.y,
             target.z
         );
 
-        // 切换到另一个点
+        // 再切到下一个路径点；真正的移动逻辑留到下一帧统一处理。
         this._index = this._index + 1 ;
         return;
     }
@@ -469,6 +483,9 @@ RobotPathMove.prototype.update = function (dt) {
     var minCornerSpeed = needsFullStop ? 0 : this.moveSpeed * this.cornerSpeedRatio;
     var desiredSpeed = this.moveSpeed;
 
+    // 接近目标时逐步减速：
+    // 1. 下一节点是特殊动作时，允许降到 0，方便原地切状态；
+    // 2. 下一节点仍然是普通移动点时，保留一个最小过弯速度，让运动更连贯。
     if (dist < slowDownDistance) {
         desiredSpeed = Math.max(minCornerSpeed, this.moveSpeed * slowFactor);
     }
@@ -759,6 +776,29 @@ RobotPathMove.prototype._handleTakeAction = function (node) {
     }
 };
 
+RobotPathMove.prototype._beginSpecialAction = function (node) {
+    var actionKey = this._index + ':' + (node && node.turn ? node.turn : '');
+    if (this._activeActionKey === actionKey) {
+        return !1;
+    }
+
+    this._activeActionKey = actionKey;
+    this._pauseTimer = 0;
+    this._takeActionDone = !1;
+    return !0;
+};
+
+RobotPathMove.prototype._advanceSpecialAction = function (dt) {
+    this._pauseTimer += dt;
+};
+
+RobotPathMove.prototype._finishSpecialAction = function () {
+    this._pauseTimer = 0;
+    this._takeActionDone = !1;
+    this._activeActionKey = '';
+    this._index++;
+};
+
 RobotPathMove.prototype._resetPickupToHomeState = function () {
     if (!this._pickupItem) return;
 
@@ -805,7 +845,7 @@ RobotPathMove.prototype._detachPickupItemToDropZone = function () {
 };
 
 RobotPathMove.prototype._startPutItemAction = function () {
-    if (!this._pickupItem || this._putItemActive) return;
+    if (!this._pickupItem) return;
 
     var sceneRoot = this.app.root.findByName('SceneRoot');
     var worldRoot = sceneRoot || this.app.root;
@@ -1268,7 +1308,7 @@ RobotPathMove.prototype._ensureExitPopupUi = function () {
     contact.style.color = 'rgba(235,245,240,0.9)';
     contact.innerHTML =
         '<div style="font-weight:700;color:rgba(95,255,174,0.98);margin-bottom:6px;">总部地址</div>' +
-        '<div>📍上海市杨浦区军工路1146号</div>' +
+        '<div>上海市杨浦区军工路1146号</div>' +
         '<div>服务热线：021-65494608</div>';
 
     var actions = document.createElement('div');
