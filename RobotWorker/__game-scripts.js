@@ -39537,7 +39537,7 @@ RobotPathMove.prototype._initPickupSystem = function () {
     this._updateGrabSocketPose();
     if (this._grabSocket) {
         // 初始化摆放高度、放料高度统一对齐到手部抬起后的物品高度。
-        var handRaisedItemY = this._grabSocket.getPosition().y + this._pickupLocalPos.y+0.35;
+        var handRaisedItemY = this._grabSocket.getPosition().y + this._pickupLocalPos.y+0.45;
         this._pickupHomePos.y = handRaisedItemY;
         this._pickupDropPos.y = handRaisedItemY;
     }
