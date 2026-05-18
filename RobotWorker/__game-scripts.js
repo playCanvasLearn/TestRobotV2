@@ -38948,6 +38948,7 @@ RobotPathMove.prototype.initialize = function () {
      * - turn === 'pause' 表示停留节点
      * - 左边  z轴 正方向
      * - 里面  x轴 负方向
+     * - 上方  Y轴 正方向
      */
     this.path = [
         { showMessage: '去拿料', turn: '', position: { x: 1.8, y: 0, z: 4.5 }, lookAt: { x: 1.8, y: 0, z: 5.2 } },
@@ -39509,9 +39510,9 @@ RobotPathMove.prototype._initPickupSystem = function () {
     // 这一段只负责“初始化摆放位置”：
     // 基础点来自取料路径点，再叠加 pickupSpawnOffset。
     if (pickupNode && pickupNode.lookAt) {
-        this._pickupSpawnBasePos.set(pickupNode.lookAt.x+0.2, 0.18, pickupNode.lookAt.z+0.18);
+        this._pickupSpawnBasePos.set(pickupNode.lookAt.x+0.1, 0.18, pickupNode.lookAt.z+0.22);
     } else {
-        this._pickupSpawnBasePos.set(1.2, 0.18, 5.18);
+        this._pickupSpawnBasePos.set(1.1, 0.18, 5.22);
     }
 
     this._pickupSpawnPos.copy(this._pickupSpawnBasePos);
@@ -39536,7 +39537,7 @@ RobotPathMove.prototype._initPickupSystem = function () {
     this._updateGrabSocketPose();
     if (this._grabSocket) {
         // 初始化摆放高度、放料高度统一对齐到手部抬起后的物品高度。
-        var handRaisedItemY = this._grabSocket.getPosition().y + this._pickupLocalPos.y+0.45;
+        var handRaisedItemY = this._grabSocket.getPosition().y + this._pickupLocalPos.y+0.35;
         this._pickupHomePos.y = handRaisedItemY;
         this._pickupDropPos.y = handRaisedItemY;
     }
@@ -39650,7 +39651,8 @@ RobotPathMove.prototype._ensurePickupCylinder = function () {
         item.addComponent('model', {type: 'cylinder'});
         // 缩小圆柱体，减少对手掌和手指的遮挡
         item.setLocalScale(0.08, 0.12, 0.08);
-
+        // 水平方向放置
+        item.setLocalEulerAngles(90, 0, 0);
         var mat = new pc.StandardMaterial();
         mat.diffuse.set(0.65, 0.65, 0.65);
         mat.metalness = 0.1;
@@ -39746,7 +39748,7 @@ RobotPathMove.prototype._detachPickupItemToDropZone = function () {
     var sceneRoot = this.app.root.findByName('SceneRoot');
     (sceneRoot || this.app.root).addChild(this._heldItem);
     this._heldItem.setPosition(this._pickupDropPos);
-    this._heldItem.setEulerAngles(0, 0, 0);
+    this._heldItem.setEulerAngles(90, 0, 0);
     this._heldItem.setLocalScale(this._pickupLocalScale);
     this._heldItem = null;
     this._setPickupSelectionFxMode('default');
