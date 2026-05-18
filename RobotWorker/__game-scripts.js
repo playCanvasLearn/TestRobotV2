@@ -39495,9 +39495,9 @@ RobotPathMove.prototype._initPickupSystem = function () {
     // 这一段只负责“初始化摆放位置”：
     // 基础点来自取料路径点，再叠加 pickupSpawnOffset。
     if (pickupNode && pickupNode.lookAt) {
-        this._pickupSpawnBasePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z-0.28);
+        this._pickupSpawnBasePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z+0.08);
     } else {
-        this._pickupSpawnBasePos.set(1.0, 0.18, 4.92);
+        this._pickupSpawnBasePos.set(1.0, 0.18, 5.08);
     }
 
     this._pickupSpawnPos.copy(this._pickupSpawnBasePos);
@@ -39507,9 +39507,9 @@ RobotPathMove.prototype._initPickupSystem = function () {
     // 放料高度与初始化摆放高度保持一致，避免取料和放料时一高一低。
     // 同时将放料位置沿 Z 轴负方向轻微偏移一点，避免与原位置重合得过满。
     if (dropNode && dropNode.position) {
-        this._pickupDropPos.set(dropNode.position.x-1, this._pickupHomePos.y, dropNode.position.z);
+        this._pickupDropPos.set(dropNode.position.x-1, this._pickupHomePos.y, dropNode.position.z+0.58);
     } else {
-        this._pickupDropPos.set(-2.2, this._pickupHomePos.y, 4.5);
+        this._pickupDropPos.set(-2.2, this._pickupHomePos.y, 5.08);
     }
 
     // 手上抓取位置只由 pickupHandOffset 控制：
@@ -39573,14 +39573,7 @@ RobotPathMove.prototype._findHandBoneNode = function () {
     var meshInstances = [];
     this._collectMeshInstances(root, meshInstances);
 
-    var rightHandKeywords = [
-        'righthand',
-        'right_hand',
-        'hand_r',
-        'r hand',
-        'mixamorig:righthand',
-        'bip001 r hand'
-    ];
+    // 优先左手
     var leftHandKeywords = [
         'lefthand',
         'left_hand',
@@ -39590,11 +39583,20 @@ RobotPathMove.prototype._findHandBoneNode = function () {
         'bip001 l hand'
     ];
 
+    var rightHandKeywords = [
+        'righthand',
+        'right_hand',
+        'hand_r',
+        'r hand',
+        'mixamorig:righthand',
+        'bip001 r hand'
+    ];
+
     this._handBoneNode =
-        this._findBoneNodeFromMeshInstances(meshInstances, rightHandKeywords) ||
         this._findBoneNodeFromMeshInstances(meshInstances, leftHandKeywords) ||
-        this._findDescendantByKeywords(root, rightHandKeywords) ||
+        this._findBoneNodeFromMeshInstances(meshInstances, rightHandKeywords) ||
         this._findDescendantByKeywords(root, leftHandKeywords) ||
+        this._findDescendantByKeywords(root, rightHandKeywords) ||
         null;
 
     return this._handBoneNode;
@@ -39617,10 +39619,10 @@ RobotPathMove.prototype._findDescendantByKeywords = function (root, keywords) {
 
 RobotPathMove.prototype._ensureGrabSocket = function () {
     var sceneRoot = this.app.root.findByName('SceneRoot') || this.app.root;
-    var socket = this.app.root.findByName('GrabSocket_R');
+    var socket = this.app.root.findByName('GrabSocket_L');
     if (socket) return socket;
 
-    socket = new pc.Entity('GrabSocket_R');
+    socket = new pc.Entity('GrabSocket_L');
     sceneRoot.addChild(socket);
     socket.setPosition(0, 0, 0);
     socket.setEulerAngles(0, 0, 0);
@@ -40177,7 +40179,7 @@ RobotPathMove.prototype._ensureExitPopupUi = function () {
     productList.style.display = 'grid';
     productList.style.gap = '10px';
 
-    var products = ['精密磨削机床', '数控磨床', '大型工业加工机床'];
+    var products = ['成型机床', '数控磨床', '重型机床'];
     for (var i = 0; i < products.length; i++) {
         var item = document.createElement('div');
         item.textContent = products[i];
