@@ -57,17 +57,17 @@ RobotPathMove.prototype.initialize = function () {
      * - 里面  x轴 负方向
      */
     this.path = [
-        { showMessage: '去拿料', turn: '', position: { x: 1.5, y: 0, z: 4.5 }, lookAt: { x: 1.5, y: 0, z: 5.2 } },
-        { showMessage: '拿料中', turn: '', position: { x: 1.5, y: 0, z: 5.2 }, lookAt: { x: 1.5, y: 0, z: 5.2 } },
-        { showMessage: '拿料中', turn: '', position: { x: 1.5, y: 0, z: 5.2 }, lookAt: { x: 1, y: 0, z: 5.2 } },
-        { showMessage: '拿料中', turn: 'pause', position: { x: 1.5, y: 0, z: 5.2 }, lookAt: { x: 1, y: 0, z: 5.2 } },
-        { showMessage: '拿料中', turn: 'take', position: { x: 1.5, y: 0, z: 5.2 }, lookAt: { x: 1, y: 0, z: 5.2 } },
-        { showMessage: '去加工', turn: '', position: { x: 1.5, y: 0, z: -1.1 }, lookAt: { x: 1.5, y: 0, z: -1.3 } },
-        { showMessage: '去加工', turn: '', position: { x: 1.5, y: 0, z: -1 }, lookAt: { x: 0.6, y: 0, z: -1.3 } },
+        { showMessage: '去拿料', turn: '', position: { x: 1.8, y: 0, z: 4.5 }, lookAt: { x: 1.8, y: 0, z: 5.2 } },
+        { showMessage: '拿料中', turn: '', position: { x: 1.8, y: 0, z: 5.2 }, lookAt: { x: 1.8, y: 0, z: 5.2 } },
+        { showMessage: '拿料中', turn: '', position: { x: 1.8, y: 0, z: 5.2 }, lookAt: { x: 1, y: 0, z: 5.2 } },
+        { showMessage: '拿料中', turn: 'pause', position: { x: 1.8, y: 0, z: 5.2 }, lookAt: { x: 1, y: 0, z: 5.2 } },
+        { showMessage: '拿料中', turn: 'take', position: { x: 1.8, y: 0, z: 5.2 }, lookAt: { x: 1, y: 0, z: 5.2 } },
+        { showMessage: '去加工', turn: '', position: { x: 1.8, y: 0, z: -1.1 }, lookAt: { x: 1.8, y: 0, z: -1.3 } },
+        { showMessage: '去加工', turn: '', position: { x: 1.8, y: 0, z: -1 }, lookAt: { x: 0.6, y: 0, z: -1.3 } },
         { showMessage: '加工中', turn: '', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'openDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
-        { showMessage: '加工中', turn: 'take', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'put', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'putItem', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'closeDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
@@ -79,7 +79,7 @@ RobotPathMove.prototype.initialize = function () {
         { showMessage: '加工中', turn: '', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'openDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
-        { showMessage: '加工中', turn: 'take', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'put', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'putItem', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'closeDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
@@ -97,8 +97,8 @@ RobotPathMove.prototype.initialize = function () {
         { showMessage: '放料中', turn: 'take', position: { x: -1.2, y: 0, z: 4.5 }, lookAt: { x: -1.3, y: 0, z: 4.5 } },
         { showMessage: '放料中', turn: '', position: { x: -1.2, y: 0, z: 4.5 }, lookAt: { x: -1.3, y: 0, z: 4.5 } },
         { showMessage: '去拿料', turn: '', position: { x: -1, y: 0, z: 2.7 }, lookAt: { x: -1, y: 0, z: 2.7 } },
-        { showMessage: '去拿料', turn: '', position: { x: 1.5, y: 0, z: 2.7 }, lookAt: { x: 1.5, y: 0, z: 2.7 } },
-        { showMessage: '去拿料', turn: '', position: { x: 1.5, y: 0, z: 4.5 }, lookAt: { x: 1.5, y: 0, z: 4.5 } },
+        { showMessage: '去拿料', turn: '', position: { x: 1.8, y: 0, z: 2.7 }, lookAt: { x: 1.8, y: 0, z: 2.7 } },
+        { showMessage: '去拿料', turn: '', position: { x: 1.8, y: 0, z: 4.5 }, lookAt: { x: 1.8, y: 0, z: 4.5 } },
     ];
 
     // 当前路径索引
@@ -398,12 +398,26 @@ RobotPathMove.prototype.update = function (dt) {
         // 在 take 动作即将完成前再移动物品，避免一进入 take 就直接吸到手上。
         // 数值表示“距离 take 结束还剩多少秒时”触发。
         var takeMoveLeadTime = 0.2;
-        var takeActionTriggerTime = Math.max(0.05, this.pauseTime - takeMoveLeadTime);
+        var takeActionTriggerTime = Math.max(0.05, 3.0 - takeMoveLeadTime);
 
         if (!this._takeActionDone && this._pauseTimer >= takeActionTriggerTime) {
             this._handleTakeAction(node);
             this._takeActionDone = !0;
         }
+
+        if (this._pauseTimer >= 3.0) {
+            this._finishSpecialAction();
+        }
+        return;
+    }
+    if (node.turn === 'put') {
+        this._currentSpeed = 0;
+        if (this._beginSpecialAction(node)) {
+            this.setPlayerStatus(4); // walk → idle
+        }
+
+        this._advanceSpecialAction(dt);
+        this.updateLookAt(node, dt);
 
         if (this._pauseTimer >= this.pauseTime) {
             this._finishSpecialAction();
@@ -587,7 +601,7 @@ RobotPathMove.prototype._initPickupSystem = function () {
     var pickupSpawnOffset = new pc.Vec3(0, 0, 0);
     // 圆柱体 attach 到手部挂点后的局部偏移（手部局部坐标）
     // 只影响物品抓在手上的位置，不影响场景里的初始摆放位置。
-    var pickupHandOffset = new pc.Vec3(0.08, 0.1, 0.02);
+    var pickupHandOffset = new pc.Vec3(0.08, 0.08, 0.02);
 
     for (var i = 0; i < this.path.length; i++) {
         var node = this.path[i];
@@ -602,9 +616,9 @@ RobotPathMove.prototype._initPickupSystem = function () {
     // 这一段只负责“初始化摆放位置”：
     // 基础点来自取料路径点，再叠加 pickupSpawnOffset。
     if (pickupNode && pickupNode.lookAt) {
-        this._pickupSpawnBasePos.set(pickupNode.lookAt.x, 0.18, pickupNode.lookAt.z+0.08);
+        this._pickupSpawnBasePos.set(pickupNode.lookAt.x+0.2, 0.18, pickupNode.lookAt.z+0.18);
     } else {
-        this._pickupSpawnBasePos.set(1.0, 0.18, 5.08);
+        this._pickupSpawnBasePos.set(1.2, 0.18, 5.18);
     }
 
     this._pickupSpawnPos.copy(this._pickupSpawnBasePos);
@@ -629,7 +643,7 @@ RobotPathMove.prototype._initPickupSystem = function () {
     this._updateGrabSocketPose();
     if (this._grabSocket) {
         // 初始化摆放高度、放料高度统一对齐到手部抬起后的物品高度。
-        var handRaisedItemY = this._grabSocket.getPosition().y + this._pickupLocalPos.y;
+        var handRaisedItemY = this._grabSocket.getPosition().y + this._pickupLocalPos.y+0.45;
         this._pickupHomePos.y = handRaisedItemY;
         this._pickupDropPos.y = handRaisedItemY;
     }
@@ -748,7 +762,7 @@ RobotPathMove.prototype._ensurePickupCylinder = function () {
         mat.diffuse.set(0.65, 0.65, 0.65);
         mat.metalness = 0.1;
         mat.gloss = 0.35;
-        mat.opacity = 0.9;
+        mat.opacity = 1;
         mat.blendType = pc.BLEND_NORMAL;
         mat.update();
         item.model.material = mat;
@@ -853,7 +867,7 @@ RobotPathMove.prototype._startPutItemAction = function () {
     var worldRoot = sceneRoot || this.app.root;
     var item = this._pickupItem;
 
-    this._putItemStartPos.copy(item.getPosition());
+    this._putItemStartPos.set(-0.4, 1.8, -0.6);
     this._putItemBaseEuler.copy(item.getEulerAngles());
     this._putItemMidPos.copy(this._putItemStartPos);
     this._putItemMidPos.y += this.putItemRiseHeight;

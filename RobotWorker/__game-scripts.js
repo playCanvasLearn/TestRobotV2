@@ -38960,7 +38960,7 @@ RobotPathMove.prototype.initialize = function () {
         { showMessage: '加工中', turn: '', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'openDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
-        { showMessage: '加工中', turn: 'take', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'put', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'putItem', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'closeDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
@@ -38972,7 +38972,7 @@ RobotPathMove.prototype.initialize = function () {
         { showMessage: '加工中', turn: '', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'openDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
-        { showMessage: '加工中', turn: 'take', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
+        { showMessage: '加工中', turn: 'put', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'putItem', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: 0.2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'pause', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
         { showMessage: '加工中', turn: 'closeDoor', position: { x: 0.6, y: 0, z: -0.9 }, lookAt: { x: -2, y: 0, z: -0.9 } },
@@ -39299,6 +39299,20 @@ RobotPathMove.prototype.update = function (dt) {
         }
 
         if (this._pauseTimer >= 3.0) {
+            this._finishSpecialAction();
+        }
+        return;
+    }
+    if (node.turn === 'put') {
+        this._currentSpeed = 0;
+        if (this._beginSpecialAction(node)) {
+            this.setPlayerStatus(4); // walk → idle
+        }
+
+        this._advanceSpecialAction(dt);
+        this.updateLookAt(node, dt);
+
+        if (this._pauseTimer >= this.pauseTime) {
             this._finishSpecialAction();
         }
         return;
@@ -39746,7 +39760,7 @@ RobotPathMove.prototype._startPutItemAction = function () {
     var worldRoot = sceneRoot || this.app.root;
     var item = this._pickupItem;
 
-    this._putItemStartPos.copy(item.getPosition());
+    this._putItemStartPos.set(-0.4, 1.8, -0.6);
     this._putItemBaseEuler.copy(item.getEulerAngles());
     this._putItemMidPos.copy(this._putItemStartPos);
     this._putItemMidPos.y += this.putItemRiseHeight;
