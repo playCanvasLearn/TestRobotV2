@@ -1,4 +1,5 @@
 
+
 // 创建 PlayCanvas 脚本：机器人沿路径移动
 var RobotPathMove = pc.createScript('robotPathMove');
 
@@ -1390,8 +1391,19 @@ RobotPathMove.prototype._ensureExitPopupUi = function () {
     cancelBtn.addEventListener('click', function () {
         self._hideExitPopup();
     });
-    buyBtn.addEventListener('click', function () {});
-    visitBtn.addEventListener('click', function () {});
+    buyBtn.addEventListener('click', function () {
+        window.open(
+            'https://www.shanghai-electric.com/group/',
+            '_blank'
+        );
+    });
+
+    visitBtn.addEventListener('click', function () {
+        window.open(
+            'https://www.shanghai-electric.com/listed/cply/gyzb/znzzzb/index.shtml',
+            '_blank'
+        );
+    });
     overlay.addEventListener('click', function (e) {
         if (e.target === overlay) self._hideExitPopup();
     });
