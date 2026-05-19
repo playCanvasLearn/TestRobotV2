@@ -39522,9 +39522,9 @@ RobotPathMove.prototype._initPickupSystem = function () {
     // 放料高度与初始化摆放高度保持一致，避免取料和放料时一高一低。
     // 同时将放料位置沿 Z 轴负方向轻微偏移一点，避免与原位置重合得过满。
     if (dropNode && dropNode.position) {
-        this._pickupDropPos.set(dropNode.position.x-1, this._pickupHomePos.y, dropNode.position.z+0.58);
+        this._pickupDropPos.set(dropNode.position.x-0.7, this._pickupHomePos.y, dropNode.position.z+0.58);
     } else {
-        this._pickupDropPos.set(-2.2, this._pickupHomePos.y, 5.08);
+        this._pickupDropPos.set(-2.5, this._pickupHomePos.y, 5.08);
     }
 
     // 手上抓取位置只由 pickupHandOffset 控制：
@@ -39670,6 +39670,7 @@ RobotPathMove.prototype._ensurePickupCylinder = function () {
     this._setPickupSelectionFxEnabled(!this._heldItem);
 
     item.setPosition(this._pickupHomePos);
+    item.setLocalEulerAngles(90, 0, 0);
     this._pickupLocalScale.copy(item.getLocalScale());
     return item;
 };
@@ -39717,7 +39718,8 @@ RobotPathMove.prototype._resetPickupToHomeState = function () {
     (sceneRoot || this.app.root).addChild(this._pickupItem);
 
     this._pickupItem.setPosition(this._pickupHomePos);
-    this._pickupItem.setEulerAngles(0, 0, 0);
+    this._pickupItem.setEulerAngles(90, 0, 0);
+    //this._pickupItem.setLocalEulerAngles(90, 0, 0);
     this._pickupItem.setLocalScale(this._pickupLocalScale);
 
     this._heldItem = null;
