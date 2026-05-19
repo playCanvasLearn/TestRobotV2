@@ -237,7 +237,7 @@ pc.script.createLoadingScreen(function (app) {
 
             var btnThird = createToolbarButton('固定视角', 'fixed', '', true);
             var btnFixed = createToolbarButton('第三人称视角', 'third', '');
-            var btnFirst = createToolbarButton('第一人称视角', 'first', '');
+            var ff = createToolbarButton('第一人称视角', 'first', '');
             var btnPauseAnim = createToolbarButton('暂停动画', 'pause', 'toolbar-btn-pause-anim');
 
             var btnScene = createToolbarButton('查看场景物品', 'materials', 'toolbar-btn-materials');
@@ -247,7 +247,7 @@ pc.script.createLoadingScreen(function (app) {
             
             toolbar.appendChild(btnThird);
             toolbar.appendChild(btnFixed);
-            toolbar.appendChild(btnFirst);
+            //toolbar.appendChild(btnFirst);
             toolbar.appendChild(btnPauseAnim);
             toolbar.appendChild(createToolbarSeparator());
             toolbar.appendChild(btnScene);
@@ -261,7 +261,7 @@ pc.script.createLoadingScreen(function (app) {
                 toolbar: toolbar,
                 btnThird: btnThird,
                 btnFixed: btnFixed,
-                btnFirst: btnFirst,
+                //btnFirst: btnFirst,
                 btnPauseAnim: btnPauseAnim,
                 btnScene: btnScene,
                 btnHideTv: btnHideTv,
@@ -724,16 +724,16 @@ pc.script.createLoadingScreen(function (app) {
 
         var syncViewButtons = function () {
             if (viewMode === 'first') {
-                ui.btnFirst.classList.add('is-active');
+                //ui.btnFirst.classList.add('is-active');
                 ui.btnThird.classList.remove('is-active');
                 ui.btnFixed.classList.remove('is-active');
             } else if (viewMode === 'third') {
                 ui.btnFixed.classList.add('is-active');
                 ui.btnThird.classList.remove('is-active');
-                ui.btnFirst.classList.remove('is-active');
+                //ui.btnFirst.classList.remove('is-active');
             } else {
                 ui.btnThird.classList.add('is-active');
-                ui.btnFirst.classList.remove('is-active');
+                //ui.btnFirst.classList.remove('is-active');
                 ui.btnFixed.classList.remove('is-active');
             }
         };
@@ -906,7 +906,7 @@ pc.script.createLoadingScreen(function (app) {
                 applyTvHidden(true);
             }
         });
-        hookButton(ui.btnFirst, function () { setViewMode('first'); });
+        //hookButton(ui.btnFirst, function () { setViewMode('first'); });
         hookButton(ui.btnPauseAnim, function () {
             isRobotPaused = !isRobotPaused;
             window.__robotPauseAnimation = isRobotPaused;
